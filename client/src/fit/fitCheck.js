@@ -3,6 +3,7 @@ import { toCm } from './pantsModel.js';
 // One shared body: whichever garment you're testing reads the
 // measurements it needs.
 export const BODY_FIELDS = [
+  { key: 'height', label: 'Height', min: 52, max: 84 },
   { key: 'neck', label: 'Neck', min: 11, max: 24 },
   { key: 'shoulder', label: 'Shoulder width', min: 12, max: 24 },
   { key: 'chest', label: 'Chest', min: 26, max: 64 },
@@ -21,6 +22,7 @@ export const BODY_FIELDS_BY_CATEGORY = {
 };
 
 export const DEFAULT_BODY = {
+  height: 68,
   neck: 15,
   shoulder: 17.5,
   chest: 38,

@@ -40,7 +40,7 @@ function fitColor(strain, gap, fabric, out) {
   return out.copy(C.relaxed).lerp(C.loose, Math.min(1, (gap - 3) / 3));
 }
 
-export default function Viewer3D({ model, garment, body, fabric, mode, simMode, areaVerdicts, selected, onSelect, onAdjust }) {
+export default function Viewer3D({ model, garment, body, pose, fabric, mode, simMode, areaVerdicts, selected, onSelect, onAdjust }) {
   const hostRef = useRef(null);
   const world = useRef(null);
   const [status, setStatus] = useState('Sewing pattern…');
@@ -135,14 +135,14 @@ export default function Viewer3D({ model, garment, body, fabric, mode, simMode, 
   // ---- Body: rebuilt when body measurements change ----
   useEffect(() => {
     const w = world.current;
-    const bodyModel = buildBody(body);
+    const bodyModel = buildBody(body, pose);
     w.body = bodyModel;
     if (w.bodyObject) w.scene.remove(w.bodyObject);
     w.bodyObject = buildBodyObject(bodyModel);
     w.scene.add(w.bodyObject);
     if (w.sim) w.sim.setBody(bodyModel);
     w.needsRender = true;
-  }, [body]);
+  }, [body, pose]);
 
   // ---- Garment ----
   // Quick mode: one cloth per garment type, tweaks update its rest lengths
@@ -151,7 +151,7 @@ export default function Viewer3D({ model, garment, body, fabric, mode, simMode, 
   // a short pause, like re-simulating after a pattern edit in CLO.
   useEffect(() => {
     const w = world.current;
-    const key = `${model.type}:${simMode}`;
+    const key = `${model.type}:${simMode}:${pose}`;
     const build = () => {
       const sewn = simMode === 'sewn';
       const mesh = sewn ? buildPanelGarment(model.type, garment, w.body) : buildGarmentMesh(model.type, garment, w.body);
@@ -177,7 +177,7 @@ export default function Viewer3D({ model, garment, body, fabric, mode, simMode, 
     build();
     return undefined;
     // fabric is applied by its own effect; including it here would rebuild the cloth
-  }, [model.type, garment, body, simMode]);
+  }, [model.type, garment, body, pose, simMode]);
 
   useEffect(() => {
     const w = world.current;

@@ -109,7 +109,7 @@ const GARMENT_FIELDS = {
   shirt: TOP_FIELDS,
   jacket: TOP_FIELDS,
 };
-const BODY_FIELDS = ['neck', 'shoulder', 'chest', 'waist', 'hip', 'bicep', 'armLength', 'thigh', 'knee', 'inseam'];
+const BODY_FIELDS = ['height', 'neck', 'shoulder', 'chest', 'waist', 'hip', 'bicep', 'armLength', 'thigh', 'knee', 'inseam'];
 const VALID_FABRICS = ['woven', 'stretch'];
 const VALID_SEAM_ALLOWANCES = [0.375, 0.5, 0.625, 1];
 

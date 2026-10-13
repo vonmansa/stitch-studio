@@ -7,9 +7,10 @@ import GarmentTabs from '../components/GarmentTabs.jsx';
 import BodyForm from '../components/BodyForm.jsx';
 import { FitCanvas, FitPresets, SelectedEditor } from '../components/FitEditor.jsx';
 import Viewer3D from '../three/Viewer3D.jsx';
+import { POSES } from '../three/body.js';
 
 // Body measurements the 3D mannequin is built from, whatever the garment.
-const MANNEQUIN_FIELDS = ['neck', 'shoulder', 'chest', 'waist', 'hip', 'bicep', 'armLength', 'thigh', 'knee', 'inseam'];
+const MANNEQUIN_FIELDS = ['height', 'neck', 'shoulder', 'chest', 'waist', 'hip', 'bicep', 'armLength', 'thigh', 'knee', 'inseam'];
 
 export default function Studio3D() {
   const {
@@ -27,6 +28,7 @@ export default function Studio3D() {
   const [pane, setPane] = useState('fit');
   const [mode, setMode] = useState('fit');
   const [simMode, setSimMode] = useState('sewn');
+  const [pose, setPose] = useState('apose');
 
   // Selection is shared: picking a part in 2D highlights it in 3D and vice versa.
   const selected = specFor(model, selectedKey) ? selectedKey : model.presetBase;
@@ -51,6 +53,16 @@ export default function Studio3D() {
       <div className="studio-toolbar">
         <GarmentTabs />
         <div className="toolbar">
+          <label>
+            Pose
+            <select value={pose} onChange={(e) => setPose(e.target.value)}>
+              {Object.entries(POSES).map(([key, p]) => (
+                <option key={key} value={key}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             Fabric
             <select value={fabric} onChange={(e) => setFabric(e.target.value)}>
@@ -141,6 +153,7 @@ export default function Studio3D() {
             fabric={fabric}
             mode={mode}
             simMode={simMode}
+            pose={pose}
             areaVerdicts={areaVerdicts}
             selected={selected}
             onSelect={setSelected}
@@ -152,7 +165,7 @@ export default function Studio3D() {
       <details className="studio-body">
         <summary>Body measurements (mannequin)</summary>
         <p className="muted small">
-          The mannequin is built from these. Height comes from your inseam. The{' '}
+          The mannequin is built from these: height and inseam set its proportions. The{' '}
           {model.category === 'tops' ? 'top' : 'pants'} fit check uses:{' '}
           {BODY_FIELDS.filter((f) => BODY_FIELDS_BY_CATEGORY[model.category].includes(f.key))
             .map((f) => f.label.toLowerCase())

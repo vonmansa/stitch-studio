@@ -17,6 +17,9 @@ export default function Navbar() {
         <NavLink to="/pattern" className={({ isActive }) => (isActive ? 'active' : '')}>
           Pattern Lab
         </NavLink>
+        <NavLink to="/studio" className={({ isActive }) => (isActive ? 'active' : '')}>
+          3D Studio
+        </NavLink>
       </div>
     </nav>
   );

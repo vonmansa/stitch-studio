@@ -12,6 +12,13 @@ T-shirts, shirts and jackets:
   neckband, collar/stand/cuffs or facings/collar/flaps); true-scale SVG
   download, tiled Letter/A4 printing (or save as PDF), a body-vs-garment
   ease check, and saving the pattern to a project.
+- **3D Studio** (`/studio`) — CLO3D-style: the 2D editor (fit model or
+  pattern pieces) next to a 3D mannequin built from your body
+  measurements, wearing the garment as simulated cloth (gravity, body
+  collision with friction, sleeves sewn in with virtual seams). Click a
+  part of the 3D garment and drag to change it; both views stay in sync.
+  The fit map colors the cloth by how stretched it is and how far it
+  hangs off the body.
 
 React + Vite frontend, Express backend, PostgreSQL database. Runs either
 with Docker Compose (one command) or locally with plain Node/npm.
@@ -96,6 +103,10 @@ the frontend never needs to know the backend's port directly.
   `fitCheck.js` (ease rules), `PatternSheet.jsx` /
   `PrintTiles.jsx` (sheet layout and tiled printing), and
   `MeasurementsContext.jsx` (shared state, saved in localStorage)
+- `client/src/three/` — the 3D Studio: `body.js` (parametric mannequin
+  and collision surface), `garmentMesh.js` (garment cloth mesh built
+  from the measurements), `cloth.js` (position-based cloth simulation),
+  `Viewer3D.jsx` (three.js scene, fit map, 3D picking/dragging)
 - `client/src/api/client.js` — the only place that calls `fetch`
 - `db/schema.sql` — table definition, run once to set up the database
 - `db/migrations/` — changes for databases created before they existed
@@ -115,6 +126,12 @@ the frontend never needs to know the backend's port directly.
 
 ## Not in scope yet
 
-No auth, no automated tests, no deployment. The pattern draft is a
-simplified trouser block (no darts, pockets are side-seam bags and back
-patch pockets) — sew a muslin before cutting good fabric.
+No auth, no automated tests, no deployment. The pattern drafts are
+simplified blocks (no darts; one-piece sleeves) — sew a muslin before
+cutting good fabric.
+
+The 3D garment is one cloth mesh sized from the same measurements as the
+pattern, not the individual flat pattern pieces sewn together as CLO3D
+does. Neck, shoulder and armhole-seam areas are colored from the
+measurement check rather than the simulation, because that's where the
+single-mesh approach is only approximate.

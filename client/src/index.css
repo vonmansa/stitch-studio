@@ -27,6 +27,8 @@ body {
 
 .navbar {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.5rem;
@@ -41,7 +43,8 @@ body {
 
 .navbar-links {
   display: flex;
-  gap: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.5rem;
 }
 
 .navbar-links a {
@@ -908,4 +911,135 @@ svg.dragging * {
   fill: white;
   stroke: var(--color-text);
   stroke-width: 1;
+}
+
+/* ---- 3D Studio ---- */
+
+/* The 3D Studio needs more room than the other pages. */
+.app-content:has(.studio) {
+  max-width: 1400px;
+}
+
+.studio-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.studio-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .studio-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.studio-2d {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.studio-2d > .segmented {
+  align-self: flex-start;
+}
+
+.studio-pattern {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.studio-3d {
+  min-width: 0;
+}
+
+.viewer3d {
+  position: relative;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.viewer3d-canvas {
+  height: min(72vh, 680px);
+  min-height: 380px;
+  touch-action: none;
+}
+
+.viewer3d-canvas canvas {
+  display: block;
+}
+
+.viewer3d-hud {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  right: 0.6rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.viewer3d-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.45rem 0.7rem;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer3d-selected .muted {
+  font-size: 0.75rem;
+}
+
+.viewer3d-status {
+  padding: 0.25rem 0.55rem;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.viewer3d-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.studio-body {
+  margin-top: 1.25rem;
+  padding: 0.75rem 1rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.studio-body summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.studio-body .fit-panel {
+  border: none;
+  padding: 0;
+  max-width: 520px;
 }

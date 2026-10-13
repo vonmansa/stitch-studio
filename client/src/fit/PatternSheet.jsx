@@ -1,7 +1,9 @@
+import { useId } from 'react';
 import { CM_PER_INCH } from './pantsModel.js';
 import { SEAM_ALLOWANCES } from './MeasurementsContext.jsx';
 import { draftPiece, piecePath, pieceBounds, sideSeamPointAt } from './patternDraft.js';
 import { draftDetailPieces, POCKET_OPENING } from './detailPieces.js';
+import { draftTop } from './topDraft.js';
 
 // Everything on the sheet is in inches (1 SVG unit = 1 inch), so the same
 // content renders on screen, as a true-scale SVG download, and as printed
@@ -15,7 +17,59 @@ const GAP = 2;
 
 const fmt = (v) => `${Number(v.toFixed(2))}`;
 
-export function buildSheet(garment, { seamAllowance: sa, includeDetails, includePockets }) {
+// Packs pieces left to right in rows starting at `y`, wrapping at `width`.
+function packRows(pieces, y, width, pad) {
+  const placed = [];
+  let x = MARGIN;
+  let rowHeight = 0;
+  for (const piece of pieces) {
+    const w = piece.width + 2 * pad;
+    if (x + w > width - MARGIN && x > MARGIN) {
+      x = MARGIN;
+      y += rowHeight + GAP;
+      rowHeight = 0;
+    }
+    placed.push({ piece, ox: x + pad, oy: y + pad });
+    x += w + GAP;
+    rowHeight = Math.max(rowHeight, piece.height + 2 * pad);
+  }
+  return { placed, bottom: y + rowHeight };
+}
+
+const boxOf = ({ piece, ox, oy }, pad) => ({
+  x0: ox - pad,
+  y0: oy - pad,
+  x1: ox + piece.width + pad,
+  y1: oy + piece.height + pad,
+});
+
+export function buildSheet(type, garment, options) {
+  return type === 'pants' ? buildPantsSheet(garment, options) : buildTopSheet(type, garment, options);
+}
+
+function buildTopSheet(type, garment, options) {
+  const sa = options.seamAllowance;
+  const pad = sa + 0.6;
+  const { pieces, checks, title } = draftTop(type, garment, options);
+  // Front, back and sleeve side by side on the first row, the rest below.
+  const firstRow = pieces.slice(0, 3).reduce((sum, p) => sum + p.width + 2 * pad, 0) + 2 * GAP;
+  const width = Math.max(firstRow, ...pieces.map((p) => p.width + 2 * pad)) + 2 * MARGIN;
+  const { placed, bottom } = packRows(pieces, TOP, width, pad);
+  return {
+    width,
+    height: bottom + MARGIN,
+    sa,
+    title,
+    checks,
+    main: [],
+    details: placed,
+    contentBoxes: [TITLE_BOX(width), ...placed.map((p) => boxOf(p, pad))],
+  };
+}
+
+const TITLE_BOX = (width) => ({ x0: 0, y0: 0, x1: Math.min(width, 14), y1: TOP - 0.8 });
+
+function buildPantsSheet(garment, { seamAllowance: sa, includeDetails, includePockets }) {
   const pad = sa + 0.6;
   const front = draftPiece(garment, 'front');
   const back = draftPiece(garment, 'back');
@@ -37,47 +91,42 @@ export function buildSheet(garment, { seamAllowance: sa, includeDetails, include
   const mainWidth = backOx + bb.maxX + pad + MARGIN;
   const mainBottom = oy + Math.max(fb.maxY, bb.maxY) + pad;
 
-  // Small pieces are packed left to right in rows under the main pieces.
+  // Small pieces are packed in rows under the main pieces.
   const detailPieces = draftDetailPieces(garment, { includeDetails, includePockets });
   const width = Math.max(mainWidth, ...detailPieces.map((p) => p.width + 2 * pad + 2 * MARGIN));
-  const details = [];
-  let x = MARGIN;
-  let y = mainBottom + GAP;
-  let rowHeight = 0;
-  for (const piece of detailPieces) {
-    const w = piece.width + 2 * pad;
-    if (x + w > width - MARGIN && x > MARGIN) {
-      x = MARGIN;
-      y += rowHeight + GAP;
-      rowHeight = 0;
-    }
-    details.push({ piece, ox: x + pad, oy: y + pad });
-    x += w + GAP;
-    rowHeight = Math.max(rowHeight, piece.height + 2 * pad);
-  }
+  const { placed: details, bottom } = packRows(detailPieces, mainBottom + GAP, width, pad);
+  const height = (details.length ? bottom : mainBottom) + MARGIN;
 
-  const height = (details.length ? y + rowHeight : mainBottom) + MARGIN;
-
-  // Areas with printed content (pieces plus their allowance, and the
-  // title/test square), used to skip blank pages when tiling.
+  // Areas with printed content, used to skip blank pages when tiling.
   const mainBox = ({ piece, map }) => {
     const b = pieceBounds(piece);
     const xs = [map({ x: b.minX, y: 0 })[0], map({ x: b.maxX, y: 0 })[0]];
     const ys = [map({ x: 0, y: b.minY })[1], map({ x: 0, y: b.maxY })[1]];
     return { x0: Math.min(...xs) - pad, x1: Math.max(...xs) + pad, y0: ys[0] - pad, y1: ys[1] + pad };
   };
-  const contentBoxes = [
-    { x0: 0, y0: 0, x1: Math.min(width, 14), y1: TOP - 0.8 },
-    ...main.map(mainBox),
-    ...details.map(({ piece, ox, oy }) => ({
-      x0: ox - pad,
-      y0: oy - pad,
-      x1: ox + piece.width + pad,
-      y1: oy + piece.height + pad,
-    })),
+
+  // Waist/hip go around the whole body (2 fronts + 2 backs); leg
+  // measurements go around one leg (1 front + 1 back).
+  const w = (key) => front.widths[key] + back.widths[key];
+  const checks = [
+    { label: 'Waist', target: garment.waist, total: 2 * w('waist') },
+    { label: 'Hip', target: garment.hip, total: 2 * w('hip') },
+    { label: 'Thigh', target: garment.thigh, total: w('thigh') },
+    { label: 'Knee', target: garment.knee, total: w('knee') },
+    { label: 'Leg opening', target: garment.hem, total: w('hem') },
   ];
 
-  return { width, height, sa, main, details, garment, pockets: includePockets, contentBoxes };
+  return {
+    width,
+    height,
+    sa,
+    title: `Pants · waist ${fmt(garment.waist)} in · hip ${fmt(garment.hip)} in · inseam ${fmt(garment.inseam)} in`,
+    checks,
+    main,
+    details,
+    pockets: includePockets,
+    contentBoxes: [TITLE_BOX(width), ...main.map(mainBox), ...details.map((p) => boxOf(p, pad))],
+  };
 }
 
 export function PatternSheet({ sheet, gridUnit, svgRef }) {
@@ -88,7 +137,7 @@ export function PatternSheet({ sheet, gridUnit, svgRef }) {
       viewBox={`0 0 ${sheet.width.toFixed(3)} ${sheet.height.toFixed(3)}`}
       fontFamily="system-ui, -apple-system, sans-serif"
       role="img"
-      aria-label="Drafted pant pattern pieces"
+      aria-label="Drafted pattern pieces"
     >
       <SheetContent sheet={sheet} gridUnit={gridUnit} />
     </svg>
@@ -96,7 +145,7 @@ export function PatternSheet({ sheet, gridUnit, svgRef }) {
 }
 
 export function SheetContent({ sheet, gridUnit }) {
-  const { width, height, sa, garment } = sheet;
+  const { width, height, sa } = sheet;
   const step = gridUnit === 'in' ? 1 : 1 / CM_PER_INCH;
   const gridLines = [];
   for (let i = 0, x = 0; x <= width; i++, x = i * step) {
@@ -120,8 +169,7 @@ export function SheetContent({ sheet, gridUnit }) {
         Test square: {testLabel}
       </text>
       <text x={MARGIN + testSize + 0.3} y={1.5} fontSize={0.3} fill={INK}>
-        Pants · waist {fmt(garment.waist)} in · hip {fmt(garment.hip)} in · inseam {fmt(garment.inseam)} in ·
-        seam allowance {saLabel}
+        {sheet.title} · seam allowance {saLabel}
       </text>
 
       {sheet.main.map(({ piece, label, map, dir }) => (
@@ -141,8 +189,8 @@ function GridLine({ major, ...coords }) {
 // Stroking the seam line at 2× the allowance and covering the inner half
 // with the piece fill leaves an exact offset band outside the seam — the
 // seam allowance — with a hairline at its outer edge as the cut line.
-function SeamAllowance({ d, sa }) {
-  const band = { d, fill: 'none', strokeLinejoin: 'miter', strokeMiterlimit: 4 };
+function SeamAllowance({ d, sa, clipPath }) {
+  const band = { d, fill: 'none', strokeLinejoin: 'miter', strokeMiterlimit: 4, clipPath };
   return (
     <>
       <path {...band} stroke={INK} strokeWidth={2 * sa + 0.05} />
@@ -158,12 +206,14 @@ function SeamAllowance({ d, sa }) {
 function Notch({ x, y, dx, dy, sa, double }) {
   const len = sa * 0.7;
   const offsets = double ? [-0.12, 0.12] : [0];
+  // Offsets run perpendicular to the notch, so double notches stay side
+  // by side on curved seams too.
   return offsets.map((o) => (
     <line
       key={o}
-      x1={x + o * dy}
+      x1={x - o * dy}
       y1={y + o * dx}
-      x2={x + o * dy + dx * len}
+      x2={x - o * dy + dx * len}
       y2={y + o * dx + dy * len}
       stroke={INK}
       strokeWidth={0.04}
@@ -232,19 +282,30 @@ function MainPiece({ piece, label, map, dir, sa, pockets }) {
 }
 
 function DetailPiece({ piece, ox, oy, sa }) {
+  const clipId = useId();
   const { width: w, height: h } = piece;
   // Tall, narrow pieces get their label turned to read along the length.
-  const rotated = h > w;
-  const cx = w / 2;
-  const cy = rotated ? h / 2 : Math.min(h / 2, 0.95);
+  const rotated = piece.rotated ?? h > w;
+  const cx = piece.labelAt?.x ?? w / 2;
+  const cy = piece.labelAt?.y ?? (rotated ? h / 2 : Math.min(h / 2, 0.95));
   const grain =
-    piece.grain === 'horizontal'
+    piece.grainLine ??
+    (piece.grain === 'horizontal'
       ? { x1: Math.min(2, w * 0.2), y1: h * 0.78, x2: w - Math.min(2, w * 0.2), y2: h * 0.78 }
-      : { x1: w * 0.8, y1: h * 0.15, x2: w * 0.8, y2: h * 0.85 };
+      : { x1: w * 0.8, y1: h * 0.15, x2: w * 0.8, y2: h * 0.85 });
+  const fold = piece.onFold;
 
   return (
     <g transform={`translate(${ox} ${oy})`}>
-      <SeamAllowance d={piece.path} sa={sa} />
+      {fold && (
+        // No seam allowance past a fold edge: clip the allowance band to
+        // the piece's side of the fold.
+        <clipPath id={clipId}>
+          <rect x={fold.x1} y={-sa - 1} width={w + sa + 1} height={h + 2 * sa + 2} />
+        </clipPath>
+      )}
+      <SeamAllowance d={piece.path} sa={sa} clipPath={fold ? `url(#${clipId})` : undefined} />
+      {fold && <FoldEdge fold={fold} />}
       {piece.folds.map(([[x1, y1], [x2, y2]], i) => (
         <line
           key={i}
@@ -258,7 +319,10 @@ function DetailPiece({ piece, ox, oy, sa }) {
         />
       ))}
       {piece.notches.map((n, i) => (
-        <Notch key={i} x={n.x} y={n.y} dx={n.dir[0]} dy={n.dir[1]} sa={sa} />
+        <Notch key={i} x={n.x} y={n.y} dx={n.dir[0]} dy={n.dir[1]} sa={sa} double={n.double} />
+      ))}
+      {(piece.marks ?? []).map((m, i) => (
+        <circle key={i} cx={m.x} cy={m.y} r={0.25} fill="none" stroke={INK} strokeWidth={0.04} />
       ))}
       <Grainline {...grain} />
       <g fill={INK} textAnchor="middle" transform={rotated ? `rotate(-90 ${cx} ${cy})` : undefined}>
@@ -282,6 +346,37 @@ function DetailPiece({ piece, ox, oy, sa }) {
           {piece.note}
         </text>
       )}
+    </g>
+  );
+}
+
+// A vertical edge that's cut on the fabric fold: solid fold line plus the
+// standard bracket with arrows pointing at it.
+function FoldEdge({ fold }) {
+  const { x1, y1, y2 } = fold;
+  const inset = 0.7;
+  const top = y1 + Math.min(2, (y2 - y1) * 0.2);
+  const bottom = y2 - Math.min(2, (y2 - y1) * 0.2);
+  const arrow = (y) => `${x1 + 0.3},${y - 0.15} ${x1 + 0.08},${y} ${x1 + 0.3},${y + 0.15}`;
+  const mid = (top + bottom) / 2;
+  return (
+    <g stroke={INK} strokeWidth={0.04} fill="none">
+      <line x1={x1} y1={y1} x2={x1} y2={y2} strokeWidth={0.05} />
+      <polyline points={`${x1 + 0.08},${top} ${x1 + inset},${top} ${x1 + inset},${bottom} ${x1 + 0.08},${bottom}`} />
+      <polyline points={arrow(top)} />
+      <polyline points={arrow(bottom)} />
+      <text
+        x={x1 + inset + 0.35}
+        y={mid}
+        fontSize={0.32}
+        fontWeight="700"
+        fill={INK}
+        stroke="none"
+        textAnchor="middle"
+        transform={`rotate(-90 ${x1 + inset + 0.35} ${mid})`}
+      >
+        PLACE ON FOLD
+      </text>
     </g>
   );
 }

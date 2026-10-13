@@ -1,14 +1,17 @@
 # Stitch Studio
 
 Sewing project tracker: CRUD for projects (with photo upload), a
-garment yardage calculator, and a pants pattern-making workflow:
+garment yardage calculator, and a pattern-making workflow for pants,
+T-shirts, shirts and jackets:
 
-- **Fit Studio** (`/fit`) — drag handles on a pants model to change the
+- **Fit Studio** (`/fit`) — drag handles on a garment model to change the
   fit; measurements shown in inches and cm, with fit presets.
-- **Pattern Lab** (`/pattern`) — drafts front/back, waistband, fly and
-  pocket pieces from those measurements; true-scale SVG download, tiled
-  Letter/A4 printing (or save as PDF), a body-vs-garment ease check, and
-  saving the pattern to a project.
+- **Pattern Lab** (`/pattern`) — drafts the pattern pieces from those
+  measurements (pants: front/back, waistband, fly, pockets; tops:
+  front/back, sleeve with the cap solved to the armhole + ease, plus
+  neckband, collar/stand/cuffs or facings/collar/flaps); true-scale SVG
+  download, tiled Letter/A4 printing (or save as PDF), a body-vs-garment
+  ease check, and saving the pattern to a project.
 
 React + Vite frontend, Express backend, PostgreSQL database. Runs either
 with Docker Compose (one command) or locally with plain Node/npm.
@@ -86,9 +89,11 @@ the frontend never needs to know the backend's port directly.
   as REST endpoints
 - `client/src/pages/` — one file per screen (list, form, detail,
   calculator, Fit Studio, Pattern Lab)
-- `client/src/fit/` — the pattern-making logic: `pantsModel.js` (fit
-  model geometry), `patternDraft.js` + `detailPieces.js` (pattern
-  drafting), `fitCheck.js` (ease rules), `PatternSheet.jsx` /
+- `client/src/fit/` — the pattern-making logic: `garments.js` (one
+  registry entry per garment type), `pantsModel.js` / `topModel.js` (fit
+  model geometry), `patternDraft.js` + `detailPieces.js` (pants
+  drafting), `topDraft.js` (tops drafting), `drag.js` (handle dragging),
+  `fitCheck.js` (ease rules), `PatternSheet.jsx` /
   `PrintTiles.jsx` (sheet layout and tiled printing), and
   `MeasurementsContext.jsx` (shared state, saved in localStorage)
 - `client/src/api/client.js` — the only place that calls `fetch`

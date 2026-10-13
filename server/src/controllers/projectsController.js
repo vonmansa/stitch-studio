@@ -102,26 +102,47 @@ export async function deleteProject(req, res) {
 
 // Plausible bounds only — the client enforces the real per-measurement
 // ranges. This just keeps garbage and absurd values out of the database.
-const PATTERN_NUMBER_FIELDS = {
-  garment: ['waist', 'hip', 'rise', 'thigh', 'knee', 'hem', 'inseam'],
-  body: ['waist', 'hip', 'thigh', 'knee', 'inseam'],
+const TOP_FIELDS = ['neck', 'shoulder', 'chest', 'waist', 'hem', 'length', 'sleeve', 'bicep', 'cuff'];
+const GARMENT_FIELDS = {
+  pants: ['waist', 'hip', 'rise', 'thigh', 'knee', 'hem', 'inseam'],
+  tshirt: TOP_FIELDS,
+  shirt: TOP_FIELDS,
+  jacket: TOP_FIELDS,
 };
+const BODY_FIELDS = ['neck', 'shoulder', 'chest', 'waist', 'hip', 'bicep', 'armLength', 'thigh', 'knee', 'inseam'];
 const VALID_FABRICS = ['woven', 'stretch'];
 const VALID_SEAM_ALLOWANCES = [0.375, 0.5, 0.625, 1];
+
+const isPlausible = (value) => typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 100;
 
 function validatePattern(input) {
   if (!input || typeof input !== 'object') return { error: 'Pattern must be an object' };
 
-  const clean = {};
-  for (const [group, keys] of Object.entries(PATTERN_NUMBER_FIELDS)) {
-    clean[group] = {};
-    for (const key of keys) {
-      const value = input[group]?.[key];
-      if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > 100) {
-        return { error: `${group}.${key} must be a number between 0 and 100 (inches)` };
-      }
-      clean[group][key] = value;
+  // Patterns saved before tops existed have no type and are pants.
+  const type = input.type ?? 'pants';
+  if (!(type in GARMENT_FIELDS)) {
+    return { error: `type must be one of: ${Object.keys(GARMENT_FIELDS).join(', ')}` };
+  }
+
+  const garment = {};
+  for (const key of GARMENT_FIELDS[type]) {
+    const value = input.garment?.[key];
+    if (!isPlausible(value)) {
+      return { error: `garment.${key} must be a number between 0 and 100 (inches)` };
     }
+    garment[key] = value;
+  }
+
+  // Body measurements are shared across garments, so any subset is fine;
+  // unknown keys are dropped.
+  const body = {};
+  for (const key of BODY_FIELDS) {
+    const value = input.body?.[key];
+    if (value === undefined) continue;
+    if (!isPlausible(value)) {
+      return { error: `body.${key} must be a number between 0 and 100 (inches)` };
+    }
+    body[key] = value;
   }
 
   if (!VALID_FABRICS.includes(input.fabric)) {
@@ -130,11 +151,17 @@ function validatePattern(input) {
   if (!VALID_SEAM_ALLOWANCES.includes(input.seamAllowance)) {
     return { error: `seamAllowance must be one of: ${VALID_SEAM_ALLOWANCES.join(', ')}` };
   }
-  clean.fabric = input.fabric;
-  clean.seamAllowance = input.seamAllowance;
-  clean.includeDetails = input.includeDetails !== false;
-  clean.includePockets = input.includePockets !== false;
-  return { pattern: clean };
+  return {
+    pattern: {
+      type,
+      garment,
+      body,
+      fabric: input.fabric,
+      seamAllowance: input.seamAllowance,
+      includeDetails: input.includeDetails !== false,
+      includePockets: input.includePockets !== false,
+    },
+  };
 }
 
 export async function savePattern(req, res) {

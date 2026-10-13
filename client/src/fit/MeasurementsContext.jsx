@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { MEASUREMENTS, DEFAULT_MEASUREMENTS, clampMeasurement } from './pantsModel.js';
+import { GARMENTS } from './garments.js';
 import { BODY_FIELDS, DEFAULT_BODY, FABRICS } from './fitCheck.js';
 
 const STORAGE_KEY = 'stitch-studio:fit';
@@ -13,6 +13,20 @@ export const SEAM_ALLOWANCES = [
 
 const DEFAULT_OPTIONS = { seamAllowance: 0.625, includeDetails: true, includePockets: true };
 
+const MeasurementsContext = createContext(null);
+
+// localStorage is user-editable and may hold data from an older version
+// of the app, and saved projects come from the API — so every value is
+// re-validated instead of trusted.
+function sanitizeNumbers(saved, fields, defaults) {
+  const result = { ...defaults };
+  for (const { key, min, max } of fields) {
+    const value = Number(saved?.[key]);
+    if (Number.isFinite(value)) result[key] = Math.min(max, Math.max(min, value));
+  }
+  return result;
+}
+
 function sanitizeOptions(saved) {
   return {
     seamAllowance: SEAM_ALLOWANCES.some((sa) => sa.value === saved?.seamAllowance)
@@ -22,27 +36,20 @@ function sanitizeOptions(saved) {
     includePockets: typeof saved?.includePockets === 'boolean' ? saved.includePockets : true,
   };
 }
-const MeasurementsContext = createContext(null);
 
-// localStorage is user-editable and may hold data from an older version
-// of the app, so every value is re-validated instead of trusted.
-function sanitize(saved, fields, defaults, clamp) {
-  const result = { ...defaults };
-  for (const { key, min, max } of fields) {
-    const value = Number(saved?.[key]);
-    if (Number.isFinite(value)) result[key] = clamp ? clamp(key, value) : Math.min(max, Math.max(min, value));
-  }
-  return result;
-}
+const sanitizeGarment = (type, saved) =>
+  sanitizeNumbers(saved, GARMENTS[type].measurements, GARMENTS[type].defaults);
 
-// Shared by localStorage restore and loading a pattern saved on a
-// project, since both are untrusted input in the same shape.
+// A saved project pattern: { type, garment, body, fabric, seamAllowance, ... }.
+// Patterns saved before tops existed have no type and are pants.
 export function sanitizePattern(saved) {
+  const type = saved?.type in GARMENTS ? saved.type : 'pants';
   return {
-    garment: sanitize(saved?.garment, MEASUREMENTS, DEFAULT_MEASUREMENTS, clampMeasurement),
-    body: sanitize(saved?.body, BODY_FIELDS, DEFAULT_BODY),
+    type,
+    garment: sanitizeGarment(type, saved?.garment),
+    body: sanitizeNumbers(saved?.body, BODY_FIELDS, DEFAULT_BODY),
     fabric: saved?.fabric in FABRICS ? saved.fabric : 'woven',
-    options: sanitizeOptions(saved?.options ?? saved),
+    options: sanitizeOptions(saved),
   };
 }
 
@@ -53,7 +60,20 @@ function loadState() {
   } catch {
     saved = null;
   }
-  return sanitizePattern(saved);
+  const garments = Object.fromEntries(
+    Object.keys(GARMENTS).map((type) => [
+      type,
+      // Older versions stored only pants, under `garment`.
+      sanitizeGarment(type, saved?.garments?.[type] ?? (type === 'pants' ? saved?.garment : null)),
+    ])
+  );
+  return {
+    garmentType: saved?.garmentType in GARMENTS ? saved.garmentType : 'pants',
+    garments,
+    body: sanitizeNumbers(saved?.body, BODY_FIELDS, DEFAULT_BODY),
+    fabric: saved?.fabric in FABRICS ? saved.fabric : 'woven',
+    options: sanitizeOptions(saved?.options),
+  };
 }
 
 export function MeasurementsProvider({ children }) {
@@ -67,22 +87,40 @@ export function MeasurementsProvider({ children }) {
     }
   }, [state]);
 
+  const resolve = (next, prev) => (typeof next === 'function' ? next(prev) : next);
   const updater = (field) => (next) =>
-    setState((prev) => ({
-      ...prev,
-      [field]: typeof next === 'function' ? next(prev[field]) : next,
-    }));
+    setState((prev) => ({ ...prev, [field]: resolve(next, prev[field]) }));
 
   const value = {
-    garment: state.garment,
-    setGarment: updater('garment'),
+    garmentType: state.garmentType,
+    garmentModel: GARMENTS[state.garmentType],
+    setGarmentType: (type) => setState((prev) => ({ ...prev, garmentType: type })),
+    garment: state.garments[state.garmentType],
+    setGarment: (next) =>
+      setState((prev) => ({
+        ...prev,
+        garments: {
+          ...prev.garments,
+          [prev.garmentType]: resolve(next, prev.garments[prev.garmentType]),
+        },
+      })),
     body: state.body,
     setBody: updater('body'),
     fabric: state.fabric,
     setFabric: updater('fabric'),
     options: state.options,
     setOptions: updater('options'),
-    loadPattern: (saved) => setState(sanitizePattern(saved)),
+    loadPattern: (saved) => {
+      const p = sanitizePattern(saved);
+      setState((prev) => ({
+        ...prev,
+        garmentType: p.type,
+        garments: { ...prev.garments, [p.type]: p.garment },
+        body: p.body,
+        fabric: p.fabric,
+        options: p.options,
+      }));
+    },
   };
 
   return <MeasurementsContext.Provider value={value}>{children}</MeasurementsContext.Provider>;

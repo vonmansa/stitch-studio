@@ -1,39 +1,34 @@
 import { useRef, useState } from 'react';
-import {
-  MEASUREMENTS,
-  MEASUREMENT_BY_KEY,
-  DEFAULT_MEASUREMENTS,
-  FIT_PRESETS,
-  VIEW_WIDTH,
-  VIEW_HEIGHT,
-  applyPreset,
-  detectPreset,
-  clampMeasurement,
-  snapQuarter,
-  toCm,
-  fromCm,
-  getGeometry,
-  getHandlePosition,
-  valueForPointer,
-} from '../fit/pantsModel.js';
-import PantsDrawing from '../fit/PantsDrawing.jsx';
+import { snapQuarter, toCm, fromCm } from '../fit/pantsModel.js';
+import { applyPreset, detectPreset, clampFor, specFor } from '../fit/garments.js';
+import { valueForPointer, handleDirection, cursorFor, increaseKeys } from '../fit/drag.js';
 import { useMeasurements } from '../fit/MeasurementsContext.jsx';
 import NumberField from '../components/NumberField.jsx';
+import GarmentTabs from '../components/GarmentTabs.jsx';
 
 const formatIn = (v) => `${Number(v.toFixed(2))}`;
 const formatCm = (v) => toCm(v).toFixed(1);
 
 export default function FitStudio() {
-  const { garment: measurements, setGarment: setMeasurements } = useMeasurements();
-  const [selected, setSelected] = useState('hip');
+  const {
+    garmentModel: model,
+    garment: measurements,
+    setGarment: setMeasurements,
+    options,
+  } = useMeasurements();
+  const [selectedKey, setSelected] = useState(null);
   const [dragKey, setDragKey] = useState(null);
   const svgRef = useRef(null);
 
-  const geometry = getGeometry(measurements);
-  const activePreset = detectPreset(measurements);
+  // Switching garments keeps the selection if the new garment has the
+  // same measurement (waist, hem…), otherwise falls back to its main one.
+  const selected = specFor(model, selectedKey) ? selectedKey : model.presetBase;
+  const geometry = model.getGeometry(measurements);
+  const activePreset = detectPreset(model, measurements);
+  const Drawing = model.Drawing;
 
   function setMeasurement(key, value) {
-    setMeasurements((prev) => ({ ...prev, [key]: clampMeasurement(key, value) }));
+    setMeasurements((prev) => ({ ...prev, [key]: clampFor(model, key, value) }));
   }
 
   function toSvgPoint(e) {
@@ -54,7 +49,7 @@ export default function FitStudio() {
 
   function handlePointerMove(e) {
     if (!dragKey) return;
-    const value = valueForPointer(dragKey, measurements, toSvgPoint(e));
+    const value = valueForPointer(model.getHandle, specFor(model, dragKey), measurements, toSvgPoint(e));
     if (value !== measurements[dragKey]) setMeasurement(dragKey, value);
   }
 
@@ -62,33 +57,19 @@ export default function FitStudio() {
     setDragKey(null);
   }
 
-  // Clicking the garment body (not a handle) selects whichever
-  // circumference line is closest to where you clicked.
   function handleBodyClick(e) {
-    const [, y] = toSvgPoint(e);
-    const levels = {
-      waist: geometry.waistY,
-      hip: geometry.hipY,
-      thigh: geometry.crotchY,
-      knee: geometry.kneeY,
-      hem: geometry.hemY,
-    };
-    const nearest = Object.entries(levels).reduce((best, entry) =>
-      Math.abs(entry[1] - y) < Math.abs(best[1] - y) ? entry : best
-    );
-    setSelected(nearest[0]);
+    setSelected(model.clickTarget(geometry, toSvgPoint(e)));
   }
 
-  // Arrow keys nudge the selected measurement: left/right for widths,
-  // up/down for lengths. Shift moves a full inch instead of a quarter.
+  // Arrow keys nudge the selected measurement in the direction its handle
+  // moves. Shift moves a full inch instead of a quarter.
   function handleKeyDown(e) {
-    const { axis } = MEASUREMENT_BY_KEY[selected];
+    const keys = increaseKeys(handleDirection(model.getHandle, specFor(model, selected), measurements));
     const step = e.shiftKey ? 1 : 0.25;
-    const deltas =
-      axis === 'x' ? { ArrowRight: step, ArrowLeft: -step } : { ArrowDown: step, ArrowUp: -step };
-    if (!(e.key in deltas)) return;
+    const delta = e.key === keys.up ? step : e.key === keys.down ? -step : 0;
+    if (!delta) return;
     e.preventDefault();
-    setMeasurement(selected, measurements[selected] + deltas[e.key]);
+    setMeasurement(selected, measurements[selected] + delta);
   }
 
   return (
@@ -97,25 +78,27 @@ export default function FitStudio() {
         <div>
           <h1>Fit Studio</h1>
           <p className="muted">
-            Drag the handles on the pants (or click a part to select it) to change the fit.
-            Arrow keys nudge the selected measurement by ¼″, Shift + arrow by 1″.
+            Drag the handles on the garment (or click a part to select it) to change the fit. Arrow
+            keys nudge the selected measurement by ¼″, Shift + arrow by 1″.
           </p>
         </div>
       </div>
 
+      <GarmentTabs />
+
       <div className="fit-presets" role="group" aria-label="Fit presets">
-        {Object.entries(FIT_PRESETS).map(([key, preset]) => (
+        {Object.entries(model.presets).map(([key, preset]) => (
           <button
             key={key}
             type="button"
             className={`chip ${activePreset === key ? 'chip-active' : ''}`}
-            onClick={() => setMeasurements((prev) => applyPreset(prev, key))}
+            onClick={() => setMeasurements((prev) => applyPreset(model, prev, key))}
           >
             {preset.label}
           </button>
         ))}
         <span className="muted fit-current">
-          Current fit: <strong>{activePreset ? FIT_PRESETS[activePreset].label : 'Custom'}</strong>
+          Current fit: <strong>{activePreset ? model.presets[activePreset].label : 'Custom'}</strong>
         </span>
       </div>
 
@@ -123,33 +106,40 @@ export default function FitStudio() {
         <div className="fit-canvas">
           <svg
             ref={svgRef}
-            viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+            viewBox={`0 0 ${model.view.width} ${model.view.height}`}
             tabIndex={0}
             role="application"
-            aria-label={`Pants model. Selected: ${MEASUREMENT_BY_KEY[selected].label}`}
+            aria-label={`${model.label} model. Selected: ${specFor(model, selected).label}`}
             onPointerMove={handlePointerMove}
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
             onKeyDown={handleKeyDown}
             className={dragKey ? 'dragging' : ''}
           >
-            <PantsDrawing geometry={geometry} onBodyPointerDown={handleBodyClick} />
-            <DimensionLine
-              measurementKey={selected}
+            <Drawing
               geometry={geometry}
-              value={measurements[selected]}
+              onBodyPointerDown={handleBodyClick}
+              showPockets={options.includePockets}
             />
-            {MEASUREMENTS.map(({ key, axis, label }) => {
-              const [x, y] = getHandlePosition(key, measurements);
+            <DimensionLine
+              line={model.getDimension(selected, geometry)}
+              value={measurements[selected]}
+              geometry={geometry}
+              viewWidth={model.view.width}
+            />
+            {model.measurements.map((spec) => {
+              const [x, y] = model.getHandle(spec.key, measurements);
+              const cursor = cursorFor(handleDirection(model.getHandle, spec, measurements));
               return (
                 <g
-                  key={key}
-                  className={`handle handle-${axis} ${selected === key ? 'handle-selected' : ''}`}
-                  onPointerDown={(e) => handlePointerDown(e, key)}
+                  key={spec.key}
+                  className={`handle ${selected === spec.key ? 'handle-selected' : ''}`}
+                  style={{ cursor }}
+                  onPointerDown={(e) => handlePointerDown(e, spec.key)}
                 >
-                  <title>{label}</title>
+                  <title>{spec.label}</title>
                   <circle cx={x} cy={y} r={14} className="handle-hit" />
-                  <circle cx={x} cy={y} r={selected === key ? 7 : 5.5} className="handle-dot" />
+                  <circle cx={x} cy={y} r={selected === spec.key ? 7 : 5.5} className="handle-dot" />
                 </g>
               );
             })}
@@ -157,88 +147,61 @@ export default function FitStudio() {
         </div>
 
         <MeasurementPanel
+          model={model}
           measurements={measurements}
           selected={selected}
           onSelect={setSelected}
           onChange={setMeasurement}
-          onReset={() => setMeasurements(DEFAULT_MEASUREMENTS)}
+          onReset={() => setMeasurements(model.defaults)}
         />
       </div>
     </div>
   );
 }
 
-// Shows where the selected measurement is taken, with its value in both units.
-function DimensionLine({ measurementKey, geometry: g, value }) {
+// Shows where the selected measurement is taken, with its value in both
+// units. Works for horizontal, vertical and diagonal (sleeve) lines.
+function DimensionLine({ line, value, geometry, viewWidth }) {
+  if (!line) return null;
+  const [x1, y1, x2, y2] = line;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const tick = [(-dy / len) * 5, (dx / len) * 5];
   const label = `${formatIn(value)} in · ${formatCm(value)} cm`;
-  const L = g.left;
-  const R = g.right;
 
-  let x1, y1, x2, y2;
-  switch (measurementKey) {
-    case 'waist':
-      [x1, y1, x2, y2] = [L.waist[0], g.waistY - 14, R.waist[0], g.waistY - 14];
-      break;
-    case 'hip':
-      [x1, y1, x2, y2] = [L.hip[0], g.hipY, R.hip[0], g.hipY];
-      break;
-    case 'thigh':
-      [x1, y1, x2, y2] = [L.thighOuter[0], g.crotchY, R.thighOuter[0], g.crotchY];
-      break;
-    case 'knee':
-      [x1, y1, x2, y2] = [R.kneeInner[0], g.kneeY, R.kneeOuter[0], g.kneeY];
-      break;
-    case 'hem':
-      [x1, y1, x2, y2] = [R.hemInner[0], g.hemY + 14, R.hemOuter[0], g.hemY + 14];
-      break;
-    case 'rise': {
-      const x = Math.min(L.hip[0], L.thighOuter[0]) - 18;
-      [x1, y1, x2, y2] = [x, g.waistY, x, g.crotchY];
-      break;
-    }
-    case 'inseam': {
-      const x = Math.max(R.thighOuter[0], R.kneeOuter[0], R.hemOuter[0]) + 18;
-      [x1, y1, x2, y2] = [x, g.crotchY, x, g.hemY];
-      break;
-    }
-    default:
-      return null;
+  let lx = (x1 + x2) / 2;
+  let ly = (y1 + y2) / 2;
+  let anchor = 'middle';
+  if (Math.abs(dx) < Math.abs(dy) * 0.3) {
+    // Vertical: label beside the line, on whichever side has room.
+    const roomRight = x1 + 150 < viewWidth;
+    lx = x1 + (roomRight ? 8 : -8);
+    anchor = roomRight ? 'start' : 'end';
+  } else if (Math.abs(dy) < Math.abs(dx) * 0.3) {
+    ly = Math.min(y1, y2) - 8;
+  } else {
+    // Diagonal: offset perpendicular to the line, on the upper side.
+    const perp = [-dy / len, dx / len];
+    const up = perp[1] < 0 ? perp : [-perp[0], -perp[1]];
+    lx += up[0] * 14;
+    ly += up[1] * 14;
+    anchor = lx > geometry.cx ? 'start' : 'end';
   }
-
-  const vertical = x1 === x2;
-  const labelX = vertical ? Math.min(x1 + 6, 330) : (x1 + x2) / 2;
-  const labelY = vertical ? (y1 + y2) / 2 : y1 - 8;
-  const anchor = vertical ? (x1 > g.cx ? 'end' : 'start') : 'middle';
-  const labelOffset = vertical ? (x1 > g.cx ? -12 : 12) : 0;
 
   return (
     <g className="dimension" pointerEvents="none">
       <line x1={x1} y1={y1} x2={x2} y2={y2} />
-      {vertical ? (
-        <>
-          <line x1={x1 - 5} y1={y1} x2={x1 + 5} y2={y1} />
-          <line x1={x2 - 5} y1={y2} x2={x2 + 5} y2={y2} />
-        </>
-      ) : (
-        <>
-          <line x1={x1} y1={y1 - 5} x2={x1} y2={y1 + 5} />
-          <line x1={x2} y1={y2 - 5} x2={x2} y2={y2 + 5} />
-        </>
-      )}
-      <text
-        x={vertical ? x1 + labelOffset : labelX}
-        y={labelY}
-        textAnchor={anchor}
-        className="dimension-label"
-      >
+      <line x1={x1 - tick[0]} y1={y1 - tick[1]} x2={x1 + tick[0]} y2={y1 + tick[1]} />
+      <line x1={x2 - tick[0]} y1={y2 - tick[1]} x2={x2 + tick[0]} y2={y2 + tick[1]} />
+      <text x={lx} y={ly} textAnchor={anchor} className="dimension-label">
         {label}
       </text>
     </g>
   );
 }
 
-function MeasurementPanel({ measurements, selected, onSelect, onChange, onReset }) {
-  const outseam = measurements.rise + measurements.inseam;
+function MeasurementPanel({ model, measurements, selected, onSelect, onChange, onReset }) {
   return (
     <aside className="fit-panel">
       <table className="measure-table">
@@ -250,12 +213,8 @@ function MeasurementPanel({ measurements, selected, onSelect, onChange, onReset 
           </tr>
         </thead>
         <tbody>
-          {MEASUREMENTS.map(({ key, label }) => (
-            <tr
-              key={key}
-              className={selected === key ? 'row-selected' : ''}
-              onClick={() => onSelect(key)}
-            >
+          {model.measurements.map(({ key, label }) => (
+            <tr key={key} className={selected === key ? 'row-selected' : ''} onClick={() => onSelect(key)}>
               <th scope="row">
                 <button type="button" className="row-button" onClick={() => onSelect(key)}>
                   {label}
@@ -265,19 +224,17 @@ function MeasurementPanel({ measurements, selected, onSelect, onChange, onReset 
               <td>{formatCm(measurements[key])}</td>
             </tr>
           ))}
-          <tr className="row-derived">
-            <th scope="row">Outseam (approx.)</th>
-            <td>{formatIn(outseam)}</td>
-            <td>{formatCm(outseam)}</td>
-          </tr>
+          {model.derived.map(({ label, value }) => (
+            <tr key={label} className="row-derived">
+              <th scope="row">{label}</th>
+              <td>{formatIn(value(measurements))}</td>
+              <td>{formatCm(value(measurements))}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
 
-      <SelectedEditor
-        measurementKey={selected}
-        value={measurements[selected]}
-        onChange={(v) => onChange(selected, v)}
-      />
+      <SelectedEditor spec={specFor(model, selected)} value={measurements[selected]} onChange={(v) => onChange(selected, v)} />
 
       <button type="button" className="button button-secondary" onClick={onReset}>
         Reset to default
@@ -286,8 +243,8 @@ function MeasurementPanel({ measurements, selected, onSelect, onChange, onReset 
   );
 }
 
-function SelectedEditor({ measurementKey, value, onChange }) {
-  const { label, hint, min, max } = MEASUREMENT_BY_KEY[measurementKey];
+function SelectedEditor({ spec, value, onChange }) {
+  const { label, hint, min, max } = spec;
   return (
     <div className="selected-editor">
       <h2>{label}</h2>
@@ -304,21 +261,11 @@ function SelectedEditor({ measurementKey, value, onChange }) {
       <div className="dual-inputs">
         <label>
           inches
-          <NumberField
-            value={value}
-            display={formatIn}
-            step={0.25}
-            onCommit={(n) => onChange(snapQuarter(n))}
-          />
+          <NumberField value={value} display={formatIn} step={0.25} onCommit={(n) => onChange(snapQuarter(n))} />
         </label>
         <label>
           cm
-          <NumberField
-            value={value}
-            display={formatCm}
-            step={0.5}
-            onCommit={(n) => onChange(fromCm(n))}
-          />
+          <NumberField value={value} display={formatCm} step={0.5} onCommit={(n) => onChange(fromCm(n))} />
         </label>
       </div>
       <p className="muted range-note">

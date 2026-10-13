@@ -1,18 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMeasurements, SEAM_ALLOWANCES } from '../fit/MeasurementsContext.jsx';
-import {
-  MEASUREMENT_BY_KEY,
-  VIEW_WIDTH,
-  toCm,
-  fromCm,
-  getGeometry,
-  getOutlinePath,
-} from '../fit/pantsModel.js';
-import { BODY_FIELDS, FABRICS, VERDICTS, checkFit } from '../fit/fitCheck.js';
+import { toCm, fromCm } from '../fit/pantsModel.js';
+import { BODY_FIELDS, BODY_FIELDS_BY_CATEGORY, FABRICS, VERDICTS, checkFit } from '../fit/fitCheck.js';
 import { buildSheet, PatternSheet } from '../fit/PatternSheet.jsx';
 import PrintTiles, { PAPERS, tileLayout } from '../fit/PrintTiles.jsx';
-import PantsDrawing from '../fit/PantsDrawing.jsx';
+import GarmentTabs from '../components/GarmentTabs.jsx';
 import NumberField from '../components/NumberField.jsx';
 import { getProjects, savePattern } from '../api/client.js';
 
@@ -24,15 +17,16 @@ const signed = (v, digits) => {
 };
 
 export default function PatternLab() {
-  const { garment, body, setBody, fabric, setFabric, options, setOptions } = useMeasurements();
+  const { garmentType, garmentModel: model, garment, body, setBody, fabric, setFabric, options, setOptions } =
+    useMeasurements();
   const [gridUnit, setGridUnit] = useState('in');
   const [paperKey, setPaperKey] = useState('letter');
   const [printing, setPrinting] = useState(false);
   const svgRef = useRef(null);
 
-  const sheet = buildSheet(garment, options);
+  const sheet = buildSheet(garmentType, garment, options);
   const tiles = tileLayout(sheet, paperKey);
-  const fit = checkFit(garment, body, fabric);
+  const fit = checkFit(garmentType, model.category, garment, body, fabric);
   const setOption = (key, value) => setOptions((prev) => ({ ...prev, [key]: value }));
 
   // The print pages are only rendered while printing (they duplicate the
@@ -59,7 +53,7 @@ export default function PatternLab() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `pants-pattern-w${garment.waist}-h${garment.hip}.svg`;
+    a.download = `${garmentType}-pattern.svg`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -76,7 +70,9 @@ export default function PatternLab() {
         </div>
       </div>
 
-      <SaveToProject pattern={{ garment, body, fabric, ...options }} />
+      <GarmentTabs />
+
+      <SaveToProject pattern={{ type: garmentType, garment, body, fabric, ...options }} />
 
       <section className="lab-section">
         <div className="section-heading">
@@ -117,7 +113,7 @@ export default function PatternLab() {
               checked={options.includeDetails}
               onChange={(e) => setOption('includeDetails', e.target.checked)}
             />
-            Waistband &amp; fly
+            {model.pieceOptions.details}
           </label>
           <label className="check">
             <input
@@ -125,7 +121,7 @@ export default function PatternLab() {
               checked={options.includePockets}
               onChange={(e) => setOption('includePockets', e.target.checked)}
             />
-            Pockets (side pocket bags + back patch pockets)
+            {model.pieceOptions.pockets}
           </label>
         </div>
 
@@ -169,7 +165,7 @@ export default function PatternLab() {
           </div>
         </div>
 
-        <PatternCheck sheet={sheet} garment={garment} />
+        <PatternCheck checks={sheet.checks} />
       </section>
 
       <section className="lab-section">
@@ -190,9 +186,9 @@ export default function PatternLab() {
         </div>
 
         <div className="tryon-layout">
-          <TryOnView garment={garment} body={body} fit={fit} />
+          <TryOnView model={model} garment={garment} body={body} fit={fit} />
           <div className="tryon-side">
-            <BodyForm body={body} setBody={setBody} />
+            <BodyForm fields={BODY_FIELDS_BY_CATEGORY[model.category]} body={body} setBody={setBody} />
             <FitResults fit={fit} />
           </div>
         </div>
@@ -276,38 +272,27 @@ function SaveToProject({ pattern }) {
   );
 }
 
-// Confirms the drafted pieces add back up to the finished measurements:
-// waist/hip go around the whole body (2 fronts + 2 backs), leg
-// measurements go around one leg (1 front + 1 back).
-function PatternCheck({ sheet, garment }) {
-  const [front, back] = sheet.main.map((m) => m.piece);
-  const rows = [
-    { key: 'waist', total: 2 * (front.widths.waist + back.widths.waist) },
-    { key: 'hip', total: 2 * (front.widths.hip + back.widths.hip) },
-    { key: 'thigh', total: front.widths.thigh + back.widths.thigh },
-    { key: 'knee', total: front.widths.knee + back.widths.knee },
-    { key: 'hem', total: front.widths.hem + back.widths.hem },
-  ];
-
+// Confirms the drafted pieces add back up to the Fit Studio targets
+// (and, for tops, that the sleeve cap has the intended ease).
+function PatternCheck({ checks }) {
   return (
     <div className="table-scroll">
       <table className="measure-table pattern-check">
-        <caption>Pattern check — seam-line totals vs. Fit Studio targets</caption>
+        <caption>Pattern check — drafted pieces vs. Fit Studio targets</caption>
         <thead>
           <tr>
             <th scope="col">Measurement</th>
             <th scope="col">Target</th>
-            <th scope="col">Front + back</th>
+            <th scope="col">Pattern</th>
             <th scope="col">Match</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ key, total }) => {
-            const target = garment[key];
-            const ok = Math.abs(total - target) < 0.05;
+          {checks.map(({ label, target, total }) => {
+            const ok = Math.abs(total - target) < 0.1;
             return (
-              <tr key={key}>
-                <th scope="row">{MEASUREMENT_BY_KEY[key].label}</th>
+              <tr key={label}>
+                <th scope="row">{label}</th>
                 <td>
                   {formatIn(target)} in / {formatCm(target)} cm
                 </td>
@@ -326,42 +311,30 @@ function PatternCheck({ sheet, garment }) {
 
 // ---- Test fit ----
 
-const ANKLE = 9;
-
-function TryOnView({ garment, body, fit }) {
-  const pants = getGeometry(garment);
-  const bodyShape = getGeometry({
-    waist: body.waist,
-    hip: body.hip,
-    rise: garment.rise,
-    thigh: body.thigh,
-    knee: body.knee,
-    hem: ANKLE,
-    inseam: body.inseam,
-  });
-
-  const viewHeight = Math.max(pants.hemY, bodyShape.hemY) + 24;
-
-  const verdictOf = (key) => VERDICTS[fit.areas.find((a) => a.key === key).verdict].color;
-  const L = pants.left;
-  const R = pants.right;
-  const bands = [
-    { key: 'waist', segments: [[L.waist, R.waist]] },
-    { key: 'hip', segments: [[L.hip, R.hip]] },
-    { key: 'thigh', segments: [[L.thighOuter, R.thighOuter]] },
-    { key: 'knee', segments: [[L.kneeOuter, L.kneeInner], [R.kneeInner, R.kneeOuter]] },
-  ];
+function TryOnView({ model, garment, body, fit }) {
+  const g = model.getGeometry(garment);
+  const bodyGeometry = model.bodyGeometry(model.bodyShape(body, garment));
+  const viewHeight = Math.min(model.view.height, Math.max(g.hemY, bodyGeometry.hemY) + 24);
+  const Drawing = model.Drawing;
+  const colorOf = (key) => VERDICTS[fit.areas.find((a) => a.key === key)?.verdict]?.color;
+  const bands = model.fitBands(g).filter((b) => colorOf(b.key));
 
   return (
     <div className="fit-canvas">
-      <svg viewBox={`0 0 ${VIEW_WIDTH} ${viewHeight}`} role="img" aria-label="Pants drawn over body outline">
-        <PantsDrawing geometry={pants} className="tryon-pants" />
-        <path d={getOutlinePath(bodyShape)} className="body-outline" />
+      <svg
+        viewBox={`0 0 ${model.view.width} ${viewHeight}`}
+        role="img"
+        aria-label={`${model.label} drawn over body outline`}
+      >
+        <Drawing geometry={g} className="tryon-pants" showPockets={false} />
+        <path d={model.outlinePath(bodyGeometry)} className="body-outline" />
         {bands.map(({ key, segments }) =>
           segments.map(([a, b], i) => (
             <g key={`${key}${i}`}>
-              <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke={verdictOf(key)} strokeWidth={3} strokeLinecap="round" />
-              {i === segments.length - 1 && <circle cx={b[0]} cy={b[1]} r={5} fill={verdictOf(key)} stroke="white" strokeWidth={1.5} />}
+              <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke={colorOf(key)} strokeWidth={3} strokeLinecap="round" />
+              {i === segments.length - 1 && (
+                <circle cx={b[0]} cy={b[1]} r={5} fill={colorOf(key)} stroke="white" strokeWidth={1.5} />
+              )}
             </g>
           ))
         )}
@@ -384,7 +357,7 @@ function TryOnView({ garment, body, fit }) {
   );
 }
 
-function BodyForm({ body, setBody }) {
+function BodyForm({ fields, body, setBody }) {
   const update = (key, inches) => {
     const { min, max } = BODY_FIELDS.find((f) => f.key === key);
     setBody((prev) => ({ ...prev, [key]: Math.min(max, Math.max(min, inches)) }));
@@ -402,7 +375,7 @@ function BodyForm({ body, setBody }) {
           </tr>
         </thead>
         <tbody>
-          {BODY_FIELDS.map(({ key, label }) => (
+          {BODY_FIELDS.filter((f) => fields.includes(f.key)).map(({ key, label }) => (
             <tr key={key}>
               <th scope="row">{label}</th>
               <td>
@@ -448,7 +421,7 @@ function FitResults({ fit }) {
           <tbody>
             {fit.areas.map((a) => (
               <tr key={a.key}>
-                <th scope="row">{MEASUREMENT_BY_KEY[a.key].label}</th>
+                <th scope="row">{a.label}</th>
                 <td>
                   {signed(a.ease, 2).replace(/\.?0+$/, '')} in
                   <span className="muted"> / {signed(toCm(a.ease), 1)} cm</span>
@@ -461,7 +434,7 @@ function FitResults({ fit }) {
               </tr>
             ))}
             <tr>
-              <th scope="row">Length</th>
+              <th scope="row">{fit.length.rowLabel}</th>
               <td>
                 {signed(fit.length.diff, 2).replace(/\.?0+$/, '')} in
                 <span className="muted"> / {signed(toCm(fit.length.diff), 1)} cm</span>
@@ -474,11 +447,11 @@ function FitResults({ fit }) {
       <ul className="fit-advice">
         {advice.map((a) => (
           <li key={a.key}>
-            <strong>{MEASUREMENT_BY_KEY[a.key].label}:</strong> {a.advice}
+            <strong>{a.label}:</strong> {a.advice}
           </li>
         ))}
         <li>
-          <strong>Length:</strong> {fit.length.note}
+          <strong>{fit.length.rowLabel}:</strong> {fit.length.note}
         </li>
         {advice.length === 0 && <li>No fit problems at waist, hip, thigh or knee.</li>}
       </ul>

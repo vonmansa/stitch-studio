@@ -114,7 +114,7 @@ export function piecePath(piece, map) {
 // or loop when the points are unevenly spaced (the hip sits much closer
 // to the crotch line than to the waist). At a widest point, like the hip
 // on a slim fit, the seam runs vertical, as a real hip curve does.
-function seamSegments(pts) {
+export function seamSegments(pts) {
   const n = pts.length;
   const slope = [];
   for (let i = 0; i < n - 1; i++) {

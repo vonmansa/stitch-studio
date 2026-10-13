@@ -864,3 +864,48 @@ svg.dragging * {
     display: block;
   }
 }
+
+/* ---- Garment switcher + top details ---- */
+
+.garment-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  margin-bottom: 1rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  max-width: 100%;
+}
+
+.garment-tabs button {
+  border: none;
+  background: none;
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.garment-tabs button:hover {
+  background: var(--color-bg);
+}
+
+.garment-tabs button.active {
+  background: var(--color-primary);
+  color: white;
+  font-weight: 600;
+}
+
+.garment-shade {
+  fill: #ddcfc4;
+}
+
+.garment-button {
+  fill: white;
+  stroke: var(--color-text);
+  stroke-width: 1;
+}

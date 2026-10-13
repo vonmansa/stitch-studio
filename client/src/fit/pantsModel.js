@@ -2,13 +2,13 @@ export const CM_PER_INCH = 2.54;
 
 // All measurements are stored in inches; cm is derived for display.
 export const MEASUREMENTS = [
-  { key: 'waist', label: 'Waist', min: 22, max: 50, axis: 'x', hint: 'Circumference at the waistband' },
-  { key: 'hip', label: 'Hip', min: 30, max: 60, axis: 'x', hint: 'Circumference at the fullest part of the seat' },
-  { key: 'rise', label: 'Front rise', min: 7, max: 15, axis: 'y', hint: 'Waistband down to the crotch seam' },
-  { key: 'thigh', label: 'Thigh', min: 14, max: 36, axis: 'x', hint: 'Leg circumference just below the crotch' },
-  { key: 'knee', label: 'Knee', min: 10, max: 30, axis: 'x', hint: 'Leg circumference at the knee' },
-  { key: 'hem', label: 'Leg opening', min: 8, max: 34, axis: 'x', hint: 'Leg circumference at the hem' },
-  { key: 'inseam', label: 'Inseam', min: 24, max: 36, axis: 'y', hint: 'Crotch seam down to the hem, inner leg' },
+  { key: 'waist', label: 'Waist', min: 22, max: 50, hint: 'Circumference at the waistband' },
+  { key: 'hip', label: 'Hip', min: 30, max: 60, hint: 'Circumference at the fullest part of the seat' },
+  { key: 'rise', label: 'Front rise', min: 7, max: 15, hint: 'Waistband down to the crotch seam' },
+  { key: 'thigh', label: 'Thigh', min: 14, max: 36, hint: 'Leg circumference just below the crotch' },
+  { key: 'knee', label: 'Knee', min: 10, max: 30, hint: 'Leg circumference at the knee' },
+  { key: 'hem', label: 'Leg opening', min: 8, max: 34, hint: 'Leg circumference at the hem' },
+  { key: 'inseam', label: 'Inseam', min: 24, max: 36, hint: 'Crotch seam down to the hem, inner leg' },
 ];
 
 export const MEASUREMENT_BY_KEY = Object.fromEntries(MEASUREMENTS.map((m) => [m.key, m]));
@@ -37,29 +37,6 @@ export const FIT_PRESETS = {
 export const toCm = (inches) => inches * CM_PER_INCH;
 export const fromCm = (cm) => cm / CM_PER_INCH;
 export const snapQuarter = (inches) => Math.round(inches * 4) / 4;
-
-export function clampMeasurement(key, value) {
-  const { min, max } = MEASUREMENT_BY_KEY[key];
-  return Math.min(max, Math.max(min, value));
-}
-
-export function applyPreset(measurements, presetKey) {
-  const preset = FIT_PRESETS[presetKey];
-  const next = { ...measurements };
-  for (const key of ['thigh', 'knee', 'hem']) {
-    next[key] = clampMeasurement(key, snapQuarter(measurements.hip * preset[key]));
-  }
-  return next;
-}
-
-export function detectPreset(measurements) {
-  return (
-    Object.keys(FIT_PRESETS).find((presetKey) => {
-      const expected = applyPreset(measurements, presetKey);
-      return ['thigh', 'knee', 'hem'].every((k) => expected[k] === measurements[k]);
-    }) || null
-  );
-}
 
 // ---- Drawing geometry (front view, flat garment) ----
 
@@ -167,20 +144,67 @@ export function getHandlePosition(key, m) {
   }
 }
 
-// Inverts getHandlePosition: finds the measurement value that puts the
-// handle under the pointer. Every handle moves monotonically with its
-// value, so a binary search works for all of them — including knee/hem,
-// whose leg centerline itself shifts as they widen.
-export function valueForPointer(key, m, pointer) {
-  const { min, max, axis } = MEASUREMENT_BY_KEY[key];
-  const target = axis === 'x' ? pointer[0] : pointer[1];
-  const coord = (v) => getHandlePosition(key, { ...m, [key]: v })[axis === 'x' ? 0 : 1];
-  let lo = min;
-  let hi = max;
-  for (let i = 0; i < 30; i++) {
-    const mid = (lo + hi) / 2;
-    if (coord(mid) < target) lo = mid;
-    else hi = mid;
+// Where the dimension line for each measurement is drawn: [x1, y1, x2, y2].
+export function getDimension(key, g) {
+  const L = g.left;
+  const R = g.right;
+  switch (key) {
+    case 'waist':
+      return [L.waist[0], g.waistY - 14, R.waist[0], g.waistY - 14];
+    case 'hip':
+      return [L.hip[0], g.hipY, R.hip[0], g.hipY];
+    case 'thigh':
+      return [L.thighOuter[0], g.crotchY, R.thighOuter[0], g.crotchY];
+    case 'knee':
+      return [R.kneeInner[0], g.kneeY, R.kneeOuter[0], g.kneeY];
+    case 'hem':
+      return [R.hemInner[0], g.hemY + 14, R.hemOuter[0], g.hemY + 14];
+    case 'rise': {
+      const x = Math.min(L.hip[0], L.thighOuter[0]) - 18;
+      return [x, g.waistY, x, g.crotchY];
+    }
+    case 'inseam': {
+      const x = Math.max(R.thighOuter[0], R.kneeOuter[0], R.hemOuter[0]) + 18;
+      return [x, g.crotchY, x, g.hemY];
+    }
+    default:
+      return null;
   }
-  return clampMeasurement(key, snapQuarter((lo + hi) / 2));
+}
+
+// Clicking the garment body selects whichever circumference line is
+// closest to the click.
+export function clickTarget(g, [, y]) {
+  const levels = { waist: g.waistY, hip: g.hipY, thigh: g.crotchY, knee: g.kneeY, hem: g.hemY };
+  return Object.entries(levels).reduce((best, entry) =>
+    Math.abs(entry[1] - y) < Math.abs(best[1] - y) ? entry : best
+  )[0];
+}
+
+// Lines drawn across the garment in the try-on view, keyed by fit area.
+export function fitBands(g) {
+  const L = g.left;
+  const R = g.right;
+  return [
+    { key: 'waist', segments: [[L.waist, R.waist]] },
+    { key: 'hip', segments: [[L.hip, R.hip]] },
+    { key: 'thigh', segments: [[L.thighOuter, R.thighOuter]] },
+    { key: 'knee', segments: [[L.kneeOuter, L.kneeInner], [R.kneeInner, R.kneeOuter]] },
+  ];
+}
+
+const ANKLE = 9;
+
+// Body measurements expressed as a "garment" so the same geometry draws
+// the body outline. Rise comes from the garment so both line up at the crotch.
+export function bodyShape(body, garment) {
+  return {
+    waist: body.waist,
+    hip: body.hip,
+    rise: garment.rise,
+    thigh: body.thigh,
+    knee: body.knee,
+    hem: ANKLE,
+    inseam: body.inseam,
+  };
 }

@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getProject, deleteProject } from '../api/client.js';
 import StatusBadge from '../components/StatusBadge.jsx';
-import PantsDrawing from '../fit/PantsDrawing.jsx';
 import { useMeasurements, sanitizePattern } from '../fit/MeasurementsContext.jsx';
-import { VIEW_WIDTH, VIEW_HEIGHT, getGeometry, toCm } from '../fit/pantsModel.js';
+import { GARMENTS, specFor } from '../fit/garments.js';
+import { toCm } from '../fit/pantsModel.js';
 import { FABRICS } from '../fit/fitCheck.js';
 
 export default function ProjectDetail() {
@@ -80,25 +80,21 @@ export default function ProjectDetail() {
 }
 
 function SavedPattern({ pattern, onOpen }) {
-  const { garment, fabric, options } = sanitizePattern(pattern);
-  const rows = [
-    ['Waist', garment.waist],
-    ['Hip', garment.hip],
-    ['Thigh', garment.thigh],
-    ['Leg opening', garment.hem],
-    ['Inseam', garment.inseam],
-  ];
+  const { type, garment, fabric, options } = sanitizePattern(pattern);
+  const model = GARMENTS[type];
+  const Drawing = model.Drawing;
   return (
     <section className="saved-pattern">
-      <svg viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`} role="img" aria-label="Saved pants fit">
-        <PantsDrawing geometry={getGeometry(garment)} className="tryon-pants" />
+      <svg viewBox={`0 0 ${model.view.width} ${model.view.height}`} role="img" aria-label={`Saved ${model.label} fit`}>
+        <Drawing geometry={model.getGeometry(garment)} className="tryon-pants" showPockets={options.includePockets} />
       </svg>
       <div>
-        <h2>Saved pattern</h2>
+        <h2>Saved pattern · {model.label}</h2>
         <ul className="pattern-summary">
-          {rows.map(([label, value]) => (
-            <li key={label}>
-              {label}: <strong>{value} in</strong> <span className="muted">/ {toCm(value).toFixed(1)} cm</span>
+          {model.summaryKeys.map((key) => (
+            <li key={key}>
+              {specFor(model, key).label}: <strong>{garment[key]} in</strong>{' '}
+              <span className="muted">/ {toCm(garment[key]).toFixed(1)} cm</span>
             </li>
           ))}
           <li>Fabric: {FABRICS[fabric].label}</li>
@@ -107,7 +103,7 @@ function SavedPattern({ pattern, onOpen }) {
         <button type="button" className="button" onClick={onOpen}>
           Open in Pattern Lab
         </button>
-        <p className="muted small">Replaces the measurements currently loaded in Fit Studio.</p>
+        <p className="muted small">Replaces the {model.label.toLowerCase()} measurements currently loaded in Fit Studio.</p>
       </div>
     </section>
   );

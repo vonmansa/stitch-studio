@@ -26,6 +26,7 @@ export default function Studio3D() {
   const [selectedKey, setSelected] = useState(null);
   const [pane, setPane] = useState('fit');
   const [mode, setMode] = useState('fit');
+  const [simMode, setSimMode] = useState('sewn');
 
   // Selection is shared: picking a part in 2D highlights it in 3D and vice versa.
   const selected = specFor(model, selectedKey) ? selectedKey : model.presetBase;
@@ -40,9 +41,9 @@ export default function Studio3D() {
         <div>
           <h1>3D Studio</h1>
           <p className="muted">
-            Tweak the garment in 2D or directly on the 3D body — click a part of the garment, then
-            drag sideways for width or up/down for length. Drag empty space to rotate, scroll to
-            zoom.
+            Your drafted pattern pieces, sewn together and draped on a mannequin built from your
+            body measurements. Tweak in 2D or directly on the 3D garment — click a part, then drag
+            sideways for width or up/down for length. Drag empty space to rotate, scroll to zoom.
           </p>
         </div>
       </div>
@@ -60,6 +61,21 @@ export default function Studio3D() {
               ))}
             </select>
           </label>
+          <div
+            className="segmented"
+            role="group"
+            aria-label="Simulation"
+            title="Sewn pattern: the drafted pieces are sewn together and draped (re-drapes after each edit). Quick: an approximate garment that updates live while you drag."
+          >
+            {[
+              ['sewn', 'Sewn pattern'],
+              ['quick', 'Quick'],
+            ].map(([key, label]) => (
+              <button key={key} type="button" className={simMode === key ? 'active' : ''} onClick={() => setSimMode(key)}>
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="segmented" role="group" aria-label="3D view">
             {[
               ['fit', 'Fit map'],
@@ -124,6 +140,7 @@ export default function Studio3D() {
             body={body}
             fabric={fabric}
             mode={mode}
+            simMode={simMode}
             areaVerdicts={areaVerdicts}
             selected={selected}
             onSelect={setSelected}

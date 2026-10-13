@@ -29,8 +29,11 @@ const STIFFNESS = {
 };
 
 export class ClothSim {
-  constructor(mesh, body, fabric, { stiffBending = false, iterations = ITERATIONS } = {}) {
+  constructor(mesh, body, fabric, { stiffBending = false, iterations = ITERATIONS, sewFrames = 0 } = {}) {
     this.iterations = iterations;
+    // Frames at the start with gravity off, so seams close before the
+    // pieces can fall (pattern pieces start apart, unsewn).
+    this.sewFrames = sewFrames;
     const n = mesh.pos.length;
     this.count = n;
     this.tags = mesh.tags;
@@ -42,8 +45,14 @@ export class ClothSim {
     this.b = Int32Array.from(mesh.pairs.map((p) => p[1]));
     this.kind = Uint8Array.from(mesh.pairs.map((p) => p[2]));
     this.rest = new Float32Array(mesh.pairs.length);
-    this.stitchA = Int32Array.from(mesh.stitches.map((s) => s[0]));
-    this.stitchB = Int32Array.from(mesh.stitches.map((s) => s[1]));
+    // Stitches: [vertex, b0, b1, w] sews the vertex to the point w of the
+    // way from b0 to b1 (a point along the other edge); [a, b] sews two
+    // vertices together.
+    const stitches = mesh.stitches.map((st) => (st.length === 2 ? [st[0], st[1], st[1], 0] : st));
+    this.stitchV = Int32Array.from(stitches.map((st) => st[0]));
+    this.stitchB0 = Int32Array.from(stitches.map((st) => st[1]));
+    this.stitchB1 = Int32Array.from(stitches.map((st) => st[2]));
+    this.stitchW = Float32Array.from(stitches.map((st) => st[3]));
     this.pinY = new Float32Array(n).fill(NaN);
     this.stiffBending = stiffBending;
 
@@ -67,10 +76,13 @@ export class ClothSim {
 
   // New measurements, same topology: only rest lengths and pins change,
   // and the cloth adjusts from wherever it is now.
+  // Rest lengths come from mesh.restPos when given (the flat pattern
+  // pieces), otherwise from the starting 3D shape.
   updateRest(mesh) {
+    const restPos = mesh.restPos ?? mesh.pos;
     for (let c = 0; c < this.rest.length; c++) {
-      const pa = mesh.pos[this.a[c]];
-      const pb = mesh.pos[this.b[c]];
+      const pa = restPos[this.a[c]];
+      const pb = restPos[this.b[c]];
       this.rest[c] = Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]);
     }
     this.pinY.fill(NaN);
@@ -98,19 +110,28 @@ export class ClothSim {
   }
 
   // Advances one animation frame. Returns false once the cloth has settled.
+  get sewing() {
+    return this.sewFrames > 0;
+  }
+
   frame() {
     if (!this.awake) return false;
     let maxMove = 0;
-    for (let s = 0; s < SUBSTEPS; s++) maxMove = Math.max(maxMove, this.substep(1 / 60 / SUBSTEPS));
+    const gravity = this.sewing ? 0 : 1;
+    for (let s = 0; s < SUBSTEPS; s++) maxMove = Math.max(maxMove, this.substep(1 / 60 / SUBSTEPS, gravity));
+    if (this.sewing) {
+      this.sewFrames--;
+      return true;
+    }
     this.awakeFrames++;
     this.calmFrames = maxMove < SLEEP_MOVE ? this.calmFrames + 1 : 0;
     if (this.calmFrames > SLEEP_FRAMES || this.awakeFrames > MAX_AWAKE_FRAMES) this.awake = false;
     return true;
   }
 
-  substep(h) {
+  substep(h, gravityScale = 1) {
     const { pos, prev, count } = this;
-    const g = GRAVITY * h * h;
+    const g = GRAVITY * h * h * gravityScale;
     for (let i = 0; i < count * 3; i += 3) {
       for (let k = 0; k < 3; k++) {
         const v = (pos[i + k] - prev[i + k]) * DAMPING;
@@ -163,16 +184,21 @@ export class ClothSim {
   }
 
   // Seams have zero rest length: each pass pulls both sides most of the
-  // way together.
+  // way together. The far side may be a point along an edge (between b0
+  // and b1); its pull is shared between those two vertices.
   solveStitches() {
-    const { pos, stitchA, stitchB } = this;
-    for (let c = 0; c < stitchA.length; c++) {
-      const i = stitchA[c] * 3;
-      const j = stitchB[c] * 3;
+    const { pos, stitchV, stitchB0, stitchB1, stitchW } = this;
+    for (let c = 0; c < stitchV.length; c++) {
+      const v = stitchV[c] * 3;
+      const b0 = stitchB0[c] * 3;
+      const b1 = stitchB1[c] * 3;
+      const w = stitchW[c];
       for (let k = 0; k < 3; k++) {
-        const mid = (pos[i + k] + pos[j + k]) / 2;
-        pos[i + k] += (mid - pos[i + k]) * 0.9;
-        pos[j + k] += (mid - pos[j + k]) * 0.9;
+        const target = pos[b0 + k] * (1 - w) + pos[b1 + k] * w;
+        const diff = (target - pos[v + k]) * 0.45;
+        pos[v + k] += diff;
+        pos[b0 + k] -= diff * (1 - w);
+        pos[b1 + k] -= diff * w;
       }
     }
   }

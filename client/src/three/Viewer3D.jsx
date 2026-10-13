@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildBody } from './body.js';
 import { buildGarmentMesh, REGION_DRAG } from './garmentMesh.js';
+import { buildPanelGarment } from './panels.js';
 import { ClothSim } from './cloth.js';
 import { buildBodyObject } from './bodyMesh.js';
 import { VERDICTS } from '../fit/fitCheck.js';
@@ -39,13 +40,16 @@ function fitColor(strain, gap, fabric, out) {
   return out.copy(C.relaxed).lerp(C.loose, Math.min(1, (gap - 3) / 3));
 }
 
-export default function Viewer3D({ model, garment, body, fabric, mode, areaVerdicts, selected, onSelect, onAdjust }) {
+export default function Viewer3D({ model, garment, body, fabric, mode, simMode, areaVerdicts, selected, onSelect, onAdjust }) {
   const hostRef = useRef(null);
   const world = useRef(null);
-  const [status, setStatus] = useState('Simulating…');
+  const [status, setStatus] = useState('Sewing pattern…');
   // Latest props for the imperative event handlers and render loop.
+  // Updated in a layout effect, before any other effect reads it.
   const latest = useRef({});
-  latest.current = { model, garment, fabric, mode, areaVerdicts, selected, onSelect, onAdjust };
+  useLayoutEffect(() => {
+    latest.current = { model, garment, fabric, mode, areaVerdicts, selected, onSelect, onAdjust };
+  });
 
   // ---- Scene setup (once) ----
   useEffect(() => {
@@ -105,9 +109,11 @@ export default function Viewer3D({ model, garment, body, fabric, mode, areaVerdi
         cloth.geometry.computeVertexNormals();
         if (w.frame++ % 8 === 0) recolor(w, latest.current);
         w.needsRender = true;
-        if (!sim.awake) {
-          recolor(w, latest.current);
-          setStatus('Settled');
+        const next = sim.sewing ? 'Sewing pattern…' : sim.awake ? 'Draping…' : 'Settled';
+        if (next !== w.status) {
+          w.status = next;
+          if (next === 'Settled') recolor(w, latest.current);
+          setStatus(next);
         }
       }
       if (w.needsRender) {
@@ -127,7 +133,6 @@ export default function Viewer3D({ model, garment, body, fabric, mode, areaVerdi
   }, []);
 
   // ---- Body: rebuilt when body measurements change ----
-  const bodyKey = JSON.stringify(body);
   useEffect(() => {
     const w = world.current;
     const bodyModel = buildBody(body);
@@ -135,53 +140,50 @@ export default function Viewer3D({ model, garment, body, fabric, mode, areaVerdi
     if (w.bodyObject) w.scene.remove(w.bodyObject);
     w.bodyObject = buildBodyObject(bodyModel);
     w.scene.add(w.bodyObject);
-    if (w.sim) {
-      w.sim.setBody(bodyModel);
-      setStatus('Simulating…');
-    }
+    if (w.sim) w.sim.setBody(bodyModel);
     w.needsRender = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bodyKey]);
+  }, [body]);
 
-  // ---- Garment: a new cloth per garment type; tweaks update it in place ----
+  // ---- Garment ----
+  // Quick mode: one cloth per garment type, tweaks update its rest lengths
+  // in place (live while dragging). Sewn mode: the drafted pattern pieces
+  // are re-triangulated and re-sewn, so edits rebuild the garment — after
+  // a short pause, like re-simulating after a pattern edit in CLO.
   useEffect(() => {
     const w = world.current;
-    const mesh = buildGarmentMesh(model.type, garment, w.body);
-    if (w.clothType === model.type && w.sim) {
-      w.sim.updateRest(mesh);
-    } else {
-      if (w.cloth) {
-        w.scene.remove(w.cloth);
-        w.cloth.geometry.dispose();
+    const key = `${model.type}:${simMode}`;
+    const build = () => {
+      const sewn = simMode === 'sewn';
+      const mesh = sewn ? buildPanelGarment(model.type, garment, w.body) : buildGarmentMesh(model.type, garment, w.body);
+      if (!sewn && w.clothKey === key && w.sim) {
+        w.sim.updateRest(mesh);
+      } else {
+        replaceCloth(w, mesh, {
+          fabric: latest.current.fabric,
+          stiffBending: model.type === 'jacket',
+          iterations: model.type === 'pants' ? 10 : 16,
+          sewFrames: sewn ? 90 : 0,
+        });
+        w.clothKey = key;
+        recolor(w, latest.current);
       }
-      const sim = new ClothSim(mesh, w.body, fabric, {
-        stiffBending: model.type === 'jacket',
-        iterations: model.type === 'pants' ? 10 : 16,
-      });
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(sim.pos, 3));
-      geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(sim.count * 3), 3));
-      geometry.setIndex(new THREE.BufferAttribute(sim.faces, 1));
-      geometry.computeVertexNormals();
-      const cloth = new THREE.Mesh(
-        geometry,
-        new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide })
-      );
-      w.scene.add(cloth);
-      Object.assign(w, { sim, cloth, clothType: model.type });
-      recolor(w, latest.current);
+      w.status = null;
+      w.needsRender = true;
+    };
+    if (simMode === 'sewn' && w.clothKey === key && w.sim) {
+      const timer = setTimeout(build, 350);
+      return () => clearTimeout(timer);
     }
-    setStatus('Simulating…');
-    w.needsRender = true;
+    build();
+    return undefined;
     // fabric is applied by its own effect; including it here would rebuild the cloth
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model.type, garment, bodyKey]);
+  }, [model.type, garment, body, simMode]);
 
   useEffect(() => {
     const w = world.current;
     if (!w.sim) return;
     w.sim.setFabric(fabric);
-    setStatus('Simulating…');
+    w.status = null;
   }, [fabric]);
 
   useEffect(() => {
@@ -305,6 +307,26 @@ export default function Viewer3D({ model, garment, body, fabric, mode, areaVerdi
       </div>
     </div>
   );
+}
+
+function replaceCloth(w, mesh, { fabric, ...options }) {
+  if (w.cloth) {
+    w.scene.remove(w.cloth);
+    w.cloth.geometry.dispose();
+  }
+  const sim = new ClothSim(mesh, w.body, fabric, options);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(sim.pos, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(sim.count * 3), 3));
+  geometry.setIndex(new THREE.BufferAttribute(sim.faces, 1));
+  geometry.computeVertexNormals();
+  const cloth = new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide })
+  );
+  w.scene.add(cloth);
+  w.sim = sim;
+  w.cloth = cloth;
 }
 
 function recolor(w, { mode, fabric, model, areaVerdicts, selected }) {

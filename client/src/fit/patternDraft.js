@@ -76,15 +76,26 @@ export function draftPiece(m, side) {
   };
 }
 
-// Builds the seam-line path. `map` converts draft coordinates to sheet
-// coordinates (used to position and mirror pieces).
-export function piecePath(piece, map) {
+// The seam line as labeled cubic segments, in order around the piece:
+// waist → side seam → hem → inseam → crotch (center seam). The 2D path and
+// the 3D panels (which sew pieces together by these labels) both use it.
+export function pieceSegments(piece) {
   const p = piece.points;
   const { hipY, crotchY } = piece.levels;
-  const f = (pt) => {
-    const [x, y] = map(pt);
-    return `${x.toFixed(3)} ${y.toFixed(3)}`;
-  };
+  const line = (label, p0, p1) => ({
+    label,
+    p0,
+    c1: { x: lerp(p0.x, p1.x, 1 / 3), y: lerp(p0.y, p1.y, 1 / 3) },
+    c2: { x: lerp(p0.x, p1.x, 2 / 3), y: lerp(p0.y, p1.y, 2 / 3) },
+    p1,
+  });
+  const quad = (label, p0, q, p1) => ({
+    label,
+    p0,
+    c1: { x: p0.x + (2 / 3) * (q.x - p0.x), y: p0.y + (2 / 3) * (q.y - p0.y) },
+    c2: { x: p1.x + (2 / 3) * (q.x - p1.x), y: p1.y + (2 / 3) * (q.y - p1.y) },
+    p1,
+  });
 
   const inseamCtrl = {
     x: lerp(p.kneeInner.x, p.crotchTip.x, 0.5) + 0.4,
@@ -96,16 +107,25 @@ export function piecePath(piece, map) {
   const crotchCtrl2 = { x: 0, y: lerp(hipY, crotchY, 0.55) };
 
   return [
-    `M ${f(p.centerTop)}`,
-    `L ${f(p.sideWaist)}`,
-    ...sideSeamSegments(piece).map(({ c1, c2, p1 }) => `C ${f(c1)} ${f(c2)} ${f(p1)}`),
-    `L ${f(p.hemInner)}`,
-    `L ${f(p.kneeInner)}`,
-    `Q ${f(inseamCtrl)} ${f(p.crotchTip)}`,
-    `C ${f(crotchCtrl1)} ${f(crotchCtrl2)} ${f(p.centerAtHip)}`,
-    `L ${f(p.centerTop)}`,
-    'Z',
-  ].join(' ');
+    line('waist', p.centerTop, p.sideWaist),
+    ...sideSeamSegments(piece).map(({ p0, c1, c2, p1 }) => ({ label: 'side', p0, c1, c2, p1 })),
+    line('hem', p.hemOuter, p.hemInner),
+    line('inseam', p.hemInner, p.kneeInner),
+    quad('inseam', p.kneeInner, inseamCtrl, p.crotchTip),
+    { label: 'crotch', p0: p.crotchTip, c1: crotchCtrl1, c2: crotchCtrl2, p1: p.centerAtHip },
+    line('crotch', p.centerAtHip, p.centerTop),
+  ];
+}
+
+// Builds the seam-line path. `map` converts draft coordinates to sheet
+// coordinates (used to position and mirror pieces).
+export function piecePath(piece, map) {
+  const f = (pt) => {
+    const [x, y] = map(pt);
+    return `${x.toFixed(3)} ${y.toFixed(3)}`;
+  };
+  const segs = pieceSegments(piece);
+  return [`M ${f(segs[0].p0)}`, ...segs.map((s) => `C ${f(s.c1)} ${f(s.c2)} ${f(s.p1)}`), 'Z'].join(' ');
 }
 
 // Monotone cubic (Fritsch–Carlson) through the side seam points, treating

@@ -69,16 +69,38 @@ function path(start) {
   const api = {
     start,
     segs,
-    L(to) {
-      segs.push({ to });
+    closeLabel: null,
+    L(to, label) {
+      segs.push({ to, label });
       return api;
     },
-    C(c1, c2, to) {
-      segs.push({ c1, c2, to });
+    C(c1, c2, to, label) {
+      segs.push({ c1, c2, to, label });
+      return api;
+    },
+    // Label for the closing edge, from the last point back to the start.
+    close(label) {
+      api.closeLabel = label;
       return api;
     },
   };
   return api;
+}
+
+// The outline as labeled cubic segments (lines become straight cubics),
+// including the closing edge — the format the 3D panels are built from.
+export function labeledSegments(outline) {
+  const out = [];
+  let prev = outline.start;
+  const push = (label, p0, c1, c2, p1) => out.push({ label, p0, c1, c2, p1 });
+  const line = (label, a, b) => push(label, a, P(lerp(a.x, b.x, 1 / 3), lerp(a.y, b.y, 1 / 3)), P(lerp(a.x, b.x, 2 / 3), lerp(a.y, b.y, 2 / 3)), b);
+  for (const s of outline.segs) {
+    if (s.c1) push(s.label, prev, s.c1, s.c2, s.to);
+    else line(s.label, prev, s.to);
+    prev = s.to;
+  }
+  if (Math.hypot(prev.x - outline.start.x, prev.y - outline.start.y) > 1e-6) line(outline.closeLabel, prev, outline.start);
+  return out;
 }
 
 function samplePath(p) {
@@ -156,7 +178,9 @@ const reverse = ([p0, c1, c2, p1]) => [p1, c2, c1, p0];
 
 // ---- Bodice (front / back) ----
 
-function draftBodice(type, m, side) {
+// closedFront: draft the front as if cut on the fold at center front (no
+// button extension or lapel) — how the 3D panels treat a buttoned front.
+function draftBodice(type, m, side, { closedFront = false } = {}) {
   const cfg = DRAFT[type];
   const isFront = side === 'front';
   const neck = solveNeck(m.neck, cfg.extraNeckDepth);
@@ -172,23 +196,28 @@ function draftBodice(type, m, side) {
   const arm = [sp, P(across, lerp(sp.y, armY, 0.55)), P(across + 0.15 * (armpit.x - across), armY), armpit];
   const armholeLen = bezierLength(...arm);
 
-  const opening = isFront && type !== 'tshirt';
+  const opening = isFront && type !== 'tshirt' && !closedFront;
   const edgeX = opening ? -(cfg.extension + cfg.facing) : 0;
   const breakY = armY + 2.5;
 
-  const outline = path(snp).L(sp).C(arm[1], arm[2], armpit);
-  for (const s of seamSegments([armpit, waist, hem])) outline.C(P(s.c1.x, s.c1.y), P(s.c2.x, s.c2.y), P(s.p1.x, s.p1.y));
-  outline.L(P(edgeX, m.length));
+  const outline = path(snp).L(sp, 'shoulder').C(arm[1], arm[2], armpit, 'armhole');
+  for (const s of seamSegments([armpit, waist, hem])) {
+    outline.C(P(s.c1.x, s.c1.y), P(s.c2.x, s.c2.y), P(s.p1.x, s.p1.y), 'side');
+  }
+  outline.L(P(edgeX, m.length), 'hem');
 
   const features = { folds: [], marks: [] };
   let lapel = null;
   if (!isFront) {
     const [, c1, c2, end] = reverse(neck.back);
-    outline.L(P(0, BACK_NECK_DEPTH)).C(c1, c2, end);
+    outline.L(P(0, BACK_NECK_DEPTH), 'center').C(c1, c2, end, 'neck');
     features.onFold = { x1: 0, y1: BACK_NECK_DEPTH, x2: 0, y2: m.length };
-  } else if (type === 'tshirt') {
+  } else if (closedFront && type === 'jacket') {
+    // V-neck: straight from the side neck point down to the break.
+    outline.L(P(0, breakY), 'center').close('neck');
+  } else if (type === 'tshirt' || closedFront) {
     const [, c1, c2, end] = reverse(neck.front);
-    outline.L(P(0, neck.fd)).C(c1, c2, end);
+    outline.L(P(0, neck.fd), 'center').C(c1, c2, end, 'neck');
     features.onFold = { x1: 0, y1: neck.fd, x2: 0, y2: m.length };
   } else if (type === 'shirt') {
     const [, c1, c2, end] = reverse(neck.front);
@@ -281,13 +310,14 @@ function draftSleeve(type, m, armholeTotal) {
   const L = Math.max(length, h + 1);
 
   const outline = path(cap.left[0])
-    .C(cap.left[1], cap.left[2], cap.left[3])
-    .C(cap.right[1], cap.right[2], cap.right[3])
-    .L(P(hemW / 2, L))
-    .L(P(-hemW / 2, L));
+    .C(cap.left[1], cap.left[2], cap.left[3], 'capFront')
+    .C(cap.right[1], cap.right[2], cap.right[3], 'capBack')
+    .L(P(hemW / 2, L), 'underarmBack')
+    .L(P(-hemW / 2, L), 'hem')
+    .close('underarmFront');
 
   return {
-    measures: { bicep: 2 * bw, hemW, length: L, capEase: cap.length - armholeTotal },
+    measures: { bicep: 2 * bw, hemW, length: L, capEase: cap.length - armholeTotal, capHeight: h },
     piece: {
       key: 'sleeve',
       name: 'SLEEVE',
@@ -431,6 +461,25 @@ function patchPocket(key, name, w, h, cut) {
     folds: [[P(0, 1), P(w, 1)]],
   };
 }
+
+// ---- 3D panels ----
+
+// Front, back and sleeve as labeled seam-line outlines for sewing in 3D:
+// fronts closed at center front, front and back still half pieces (the
+// 3D side mirrors them across the fold).
+export function draftTopPanels(type, m) {
+  const front = draftBodice(type, m, 'front', { closedFront: true });
+  const back = draftBodice(type, m, 'back');
+  const sleeve = draftSleeve(type, m, front.measures.armholeLen + back.measures.armholeLen);
+  return {
+    front: labeledSegments(front.piece.outline),
+    back: labeledSegments(back.piece.outline),
+    sleeve: labeledSegments(sleeve.piece.outline),
+    levels: { armY: DRAFT_ARM_Y(type, m), capHeight: sleeve.measures.capHeight, sleeveLength: sleeve.measures.length },
+  };
+}
+
+const DRAFT_ARM_Y = (type, m) => m.chest / 8 + 4 + DRAFT[type].armExtra;
 
 // ---- Entry point ----
 

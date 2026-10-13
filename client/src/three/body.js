@@ -189,3 +189,24 @@ export function torsoRadiiAt(body, y) {
   const last = secs[secs.length - 1];
   return [last.rx, last.rz];
 }
+
+// Center and radii [x, z, rx, rz] of a vertical limb (torso or leg) at
+// height y, interpolated between its sections.
+export function limbAtY(limb, y) {
+  const secs = limb.sections;
+  const top = secs.reduce((a, b) => (b.p[1] > a.p[1] ? b : a));
+  const bottom = secs.reduce((a, b) => (b.p[1] < a.p[1] ? b : a));
+  if (y >= top.p[1]) return [top.p[0], top.p[2], top.rx, top.rz];
+  if (y <= bottom.p[1]) return [bottom.p[0], bottom.p[2], bottom.rx, bottom.rz];
+  for (let i = 0; i < secs.length - 1; i++) {
+    const a = secs[i];
+    const b = secs[i + 1];
+    const lo = Math.min(a.p[1], b.p[1]);
+    const hi = Math.max(a.p[1], b.p[1]);
+    if (y >= lo && y <= hi) {
+      const t = (y - a.p[1]) / (b.p[1] - a.p[1] || 1);
+      return [a.p[0] + (b.p[0] - a.p[0]) * t, a.p[2] + (b.p[2] - a.p[2]) * t, a.rx + (b.rx - a.rx) * t, a.rz + (b.rz - a.rz) * t];
+    }
+  }
+  return [bottom.p[0], bottom.p[2], bottom.rx, bottom.rz];
+}

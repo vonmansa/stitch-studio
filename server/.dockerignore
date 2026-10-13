@@ -1,0 +1,20 @@
+# Reinstalled by `npm ci` inside the image — shipping the host's copy
+# would bake in the wrong OS/arch native binaries and bloat the build
+# context sent to the Docker daemon.
+node_modules
+
+# Real secrets live in environment variables set by docker-compose.yml,
+# never baked into the image. If this got copied in, it would be
+# permanently embedded in an image layer — recoverable by anyone who
+# pulls the image, even after the file is later "removed".
+.env
+.env.*
+
+# Uploaded photos are runtime data, not build input — the Dockerfile
+# creates an empty uploads/ dir itself, and docker-compose mounts a
+# volume over it for persistence.
+uploads
+
+.git
+.gitignore
+*.md

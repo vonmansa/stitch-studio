@@ -1,0 +1,79 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Named volume so project data survives `docker compose down` (it
+      # only lives on the host filesystem, outside any container).
+      - pgdata:/var/lib/postgresql/data
+      # The postgres image runs every .sql/.sh file in
+      # /docker-entrypoint-initdb.d, alphabetically, but only the very
+      # first time it starts against an empty data directory. Mounting
+      # the existing schema here replaces the old manual
+      # `createdb && psql -f db/schema.sql` step from local setup.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - stitch-net
+
+  server:
+    build:
+      context: ./server
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      # "db" is the service name above, not localhost — on the network
+      # Compose creates for this project, each service is reachable by
+      # its service name via built-in DNS.
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Uploaded photos land in /app/uploads inside the container (see
+      # server/Dockerfile). Without this volume they'd vanish the
+      # moment the container is recreated, since anything written
+      # inside a container's own writable layer is thrown away with it.
+      - uploads:/app/uploads
+    ports:
+      # Published mainly so you can curl/browse the API directly while
+      # testing. The client container never uses this — it talks to
+      # "server:4000" over the internal network instead.
+      - "4000:4000"
+    depends_on:
+      db:
+        # Waits for db's healthcheck to pass, not just for the
+        # container to start — Postgres accepting TCP connections and
+        # Postgres being ready to run queries are different moments,
+        # and the server would otherwise sometimes race it on cold start.
+        condition: service_healthy
+    networks:
+      - stitch-net
+
+  client:
+    build:
+      context: ./client
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - server
+    networks:
+      - stitch-net
+
+volumes:
+  pgdata:
+  uploads:
+
+networks:
+  stitch-net:
+    driver: bridge

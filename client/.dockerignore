@@ -1,0 +1,13 @@
+# Reinstalled inside the image by `npm ci`.
+node_modules
+
+# Rebuilt inside the image by `npm run build` — any stale local build
+# shouldn't leak into the image or bloat the build context.
+dist
+
+.env
+.env.*
+
+.git
+.gitignore
+*.md

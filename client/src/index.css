@@ -1,0 +1,866 @@
+:root {
+  --color-bg: #faf8f6;
+  --color-text: #2b2320;
+  --color-border: #ddd3cc;
+  --color-primary: #a85c4d;
+  --color-primary-dark: #8a4a3d;
+  --color-muted: #7a6f68;
+  --color-danger: #b3392f;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: white;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.navbar-brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.navbar-links {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.navbar-links a {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.navbar-links a.active {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.button {
+  display: inline-block;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.button:hover {
+  background: var(--color-primary-dark);
+}
+
+.button-danger {
+  background: var(--color-danger);
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  font-size: 0.9rem;
+}
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.25rem;
+}
+
+.project-card {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.project-card a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.project-thumb {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #eee;
+  margin-bottom: 0.5rem;
+}
+
+.project-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-planning {
+  background: #e6e0f8;
+  color: #5b3fa3;
+}
+
+.status-in-progress {
+  background: #fdeecb;
+  color: #9a6b0c;
+}
+
+.status-done {
+  background: #d9f0dd;
+  color: #2e7d43;
+}
+
+.muted {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.error {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.detail-photo {
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.detail-fields {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  row-gap: 0.75rem;
+}
+
+.detail-fields dt {
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.detail-fields dd {
+  margin: 0;
+}
+
+.notes {
+  white-space: pre-wrap;
+}
+
+.project-form,
+.form-page form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 480px;
+}
+
+.project-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.project-form input,
+.project-form select,
+.project-form textarea {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-weight: normal;
+}
+
+.result-box {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  max-width: 480px;
+}
+
+/* ---- Fit Studio ---- */
+
+.fit-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.chip {
+  border: 1px solid var(--color-border);
+  background: white;
+  color: var(--color-text);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--color-primary);
+}
+
+.chip-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.fit-current {
+  margin-left: auto;
+}
+
+.fit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .fit-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fit-canvas {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.fit-canvas svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.fit-canvas svg:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.pants-body {
+  fill: #e9dfd7;
+  stroke: var(--color-text);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  cursor: pointer;
+}
+
+.pants-body:hover {
+  fill: #e3d5ca;
+}
+
+.pants-detail {
+  fill: none;
+  stroke: var(--color-text);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.pants-stitch {
+  stroke-dasharray: 3 3;
+}
+
+.pants-crease {
+  stroke: var(--color-muted);
+  stroke-width: 0.75;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
+.handle-hit {
+  fill: transparent;
+}
+
+.handle-x {
+  cursor: ew-resize;
+}
+
+.handle-y {
+  cursor: ns-resize;
+}
+
+.handle-dot {
+  fill: white;
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  transition: r 0.1s;
+}
+
+.handle:hover .handle-dot,
+.handle-selected .handle-dot {
+  fill: var(--color-primary);
+}
+
+svg.dragging,
+svg.dragging * {
+  cursor: grabbing;
+}
+
+.dimension line {
+  stroke: var(--color-primary-dark);
+  stroke-width: 1.25;
+}
+
+.dimension-label {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--color-primary-dark);
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.fit-panel {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.measure-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.measure-table th,
+.measure-table td {
+  padding: 0.35rem 0.5rem;
+  text-align: right;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.measure-table th:first-child {
+  text-align: left;
+}
+
+.measure-table thead th {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.measure-table tbody tr {
+  cursor: pointer;
+}
+
+.measure-table tbody tr:hover {
+  background: var(--color-bg);
+}
+
+.measure-table .row-selected {
+  background: #f6e8e4;
+}
+
+.measure-table .row-selected:hover {
+  background: #f6e8e4;
+}
+
+.measure-table .row-derived {
+  cursor: default;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.measure-table .row-derived th {
+  font-weight: normal;
+}
+
+.row-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+
+.row-selected .row-button {
+  color: var(--color-primary-dark);
+}
+
+.selected-editor h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.selected-editor p {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.selected-editor input[type='range'] {
+  width: 100%;
+  accent-color: var(--color-primary);
+}
+
+.dual-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.dual-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.dual-inputs input {
+  font: inherit;
+  font-size: 1rem;
+  color: var(--color-text);
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  width: 100%;
+}
+
+.range-note {
+  font-size: 0.8rem;
+}
+
+.button-secondary {
+  background: white;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  align-self: flex-start;
+}
+
+.button-secondary:hover {
+  background: var(--color-bg);
+}
+
+/* ---- Pattern Lab ---- */
+
+.lab-section {
+  margin-bottom: 2.5rem;
+}
+
+.section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.toolbar select {
+  font: inherit;
+  font-weight: normal;
+  color: var(--color-text);
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: white;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.segmented button {
+  border: none;
+  background: white;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--color-border);
+}
+
+.segmented button.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.pattern-sheet-wrap {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.pattern-sheet {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.small {
+  font-size: 0.8rem;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.pattern-check {
+  margin-top: 1rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.pattern-check caption {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0 0 0.5rem;
+}
+
+.measure-table td.ok {
+  color: #2e7d43;
+  font-weight: 700;
+}
+
+.measure-table td.bad {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.tryon-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .tryon-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tryon-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fit-panel h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.tryon-pants .pants-body {
+  fill-opacity: 0.6;
+  cursor: default;
+}
+
+.tryon-pants .pants-body:hover {
+  fill: #e9dfd7;
+}
+
+.body-outline {
+  fill: none;
+  stroke: #1f1a17;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
+.tryon-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.tryon-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tryon-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.body-form td {
+  padding: 0.25rem 0.35rem;
+}
+
+.body-form input {
+  width: 100%;
+  max-width: 6.5rem;
+  font: inherit;
+  text-align: right;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.verdict {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--verdict);
+  background: color-mix(in srgb, var(--verdict) 12%, white);
+  white-space: nowrap;
+}
+
+.fit-advice {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.save-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.save-bar label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.save-bar select {
+  min-width: 0;
+  font: inherit;
+  font-weight: normal;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: white;
+  max-width: 100%;
+}
+
+.save-status {
+  font-size: 0.9rem;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.piece-toggles {
+  margin-bottom: 0.75rem;
+}
+
+.toolbar label.check {
+  color: var(--color-text);
+  font-weight: normal;
+  font-size: 0.9rem;
+}
+
+.check input {
+  accent-color: var(--color-primary);
+}
+
+.export-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.export-panel > div:first-child {
+  flex: 1 1 320px;
+}
+
+.export-panel h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.export-panel p {
+  margin: 0;
+}
+
+.saved-pattern {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.saved-pattern svg {
+  width: 100%;
+  height: auto;
+}
+
+.saved-pattern h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.pattern-summary {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+@media (max-width: 520px) {
+  .saved-pattern {
+    grid-template-columns: 1fr;
+  }
+
+  .saved-pattern svg {
+    max-width: 180px;
+  }
+}
+
+/* Tiled print pages: only exist while printing, and only they print. */
+.print-tiles {
+  display: none;
+}
+
+@media print {
+  #root {
+    display: none !important;
+  }
+
+  .print-tiles {
+    display: block;
+  }
+
+  .print-tile {
+    break-after: page;
+  }
+
+  .print-tile:last-child {
+    break-after: auto;
+  }
+
+  .print-tile svg {
+    display: block;
+  }
+}

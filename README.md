@@ -14,14 +14,39 @@ T-shirts, shirts and jackets:
   ease check, and saving the pattern to a project.
 - **3D Studio** (`/studio`) — CLO3D-style: the 2D editor (fit model or
   pattern pieces) next to a 3D mannequin built from your body
-  measurements, wearing the garment as simulated cloth (gravity, body
-  collision with friction, sleeves sewn in with virtual seams). Click a
-  part of the 3D garment and drag to change it; both views stay in sync.
-  The fit map colors the cloth by how stretched it is and how far it
-  hangs off the body.
+  measurements (including height) in a choice of poses. The drafted
+  pattern pieces are triangulated into cloth, arranged around the body,
+  sewn together with virtual seams and draped (gravity, body collision
+  with friction). Click a part of the 3D garment and drag to change it;
+  both views stay in sync. The fit map colors the cloth by how stretched
+  it is relative to the flat pattern and how far it hangs off the body.
 
-React + Vite frontend, Express backend, PostgreSQL database. Runs either
-with Docker Compose (one command) or locally with plain Node/npm.
+React + Vite frontend, Express backend, PostgreSQL database, three.js for
+3D. Runs either with Docker Compose (one command) or locally with plain
+Node/npm.
+
+## Screenshots
+
+**3D Studio** — the drafted pants pattern (left) sewn together and draped
+on a mannequin built from body measurements (right):
+
+![3D Studio: pattern pieces next to the draped pants](docs/screenshots/3d-studio.png)
+
+**Fit map** — a shirt in T-pose; red shows where the cloth is stretched
+tight (here the armholes, pulled by the raised arms), green fitted, blue
+relaxed, purple loose:
+
+![Fit map on a shirt in T-pose](docs/screenshots/3d-fit-map.png)
+
+**Fit Studio** — drag handles on the 2D garment; measurements in inches
+and cm:
+
+![Fit Studio with a shirt, sleeve length selected](docs/screenshots/fit-studio.png)
+
+**Pattern Lab** — the drafted jacket: front with lapel, back on the fold,
+sleeve with notched cap, facing, collar and pocket flaps:
+
+![Pattern Lab: jacket pattern pieces](docs/screenshots/pattern-lab.png)
 
 ## Running with Docker
 
@@ -103,9 +128,10 @@ the frontend never needs to know the backend's port directly.
   `fitCheck.js` (ease rules), `PatternSheet.jsx` /
   `PrintTiles.jsx` (sheet layout and tiled printing), and
   `MeasurementsContext.jsx` (shared state, saved in localStorage)
-- `client/src/three/` — the 3D Studio: `body.js` (parametric mannequin
-  and collision surface), `garmentMesh.js` (garment cloth mesh built
-  from the measurements), `cloth.js` (position-based cloth simulation),
+- `client/src/three/` — the 3D Studio: `body.js` (parametric mannequin,
+  poses and collision surface), `panels.js` (pattern pieces → triangulated
+  cloth panels, arrangement and seams), `garmentMesh.js` (the quick
+  single-mesh garment), `cloth.js` (position-based cloth simulation),
   `Viewer3D.jsx` (three.js scene, fit map, 3D picking/dragging)
 - `client/src/api/client.js` — the only place that calls `fetch`
 - `db/schema.sql` — table definition, run once to set up the database
@@ -130,8 +156,9 @@ No auth, no automated tests, no deployment. The pattern drafts are
 simplified blocks (no darts; one-piece sleeves) — sew a muslin before
 cutting good fabric.
 
-The 3D garment is one cloth mesh sized from the same measurements as the
-pattern, not the individual flat pattern pieces sewn together as CLO3D
-does. Neck, shoulder and armhole-seam areas are colored from the
-measurement check rather than the simulation, because that's where the
-single-mesh approach is only approximate.
+The 3D simulation uses the main pattern pieces (front, back, sleeves);
+collars, cuffs, waistbands, facings and pockets aren't sewn on in 3D, and
+fronts are treated as closed at center front. Neck, shoulder and
+armhole-seam areas are colored from the measurement check rather than
+the simulation. There's no cloth self-collision, and the mannequin is a
+simplified parametric body rather than a scanned avatar.

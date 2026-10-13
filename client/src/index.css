@@ -1043,3 +1043,8 @@ svg.dragging * {
   padding: 0;
   max-width: 520px;
 }
+
+.page-header > .button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
